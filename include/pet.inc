@@ -36,3 +36,4 @@
 ;----------------------------------------------------------------------------
 
 	CHROUT	= $FFD2         ; Output a character
+	GETIN   = $FFE4			; Read a character

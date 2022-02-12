@@ -22,6 +22,15 @@ SECOND_JIFFIES  = 60                ; Number of jiffies in a second
 
 NUM_BANDS       = 16                ; 16 bands in the spectrum data
 
+; Symbol definitions for square drawing
+
+TOPLEFTSYMBOL_ID		= %1001		; 6	
+TOPRIGHTSYMBOL_ID		= %0101		; 10
+BOTTOMLEFTSYMBOL_ID		= %1010		; 5
+BOTTOMRIGHTSYMBOL_ID	= %0110		; 9
+HLINESYMBOL_ID			= %1100		; 
+VLINESYMBOL_ID			= %0011
+
 ; System Locations ------------------------------------------------------------------
 
 .INCLUDE "common.inc"
@@ -62,11 +71,19 @@ zptmpC = $1F
 
 ScratchStart:    
     temp:            .res  1                ; General scratch variable
+    temp2:           .res  1                ; Second  scratch variable
+    temp3:           .res  1                ; Third scratch variable
     MultiplyTemp:    .res  1                ; Scratch variable for multiply code
     resultLo:        .res  1                ; Results from multiply operations
     resultHi:        .res  1                
     serialBuffer:    .res SERIAL_BUF_LEN    ; Our input buffer
     Peaks:           .res NUM_BANDS         ; Data for band peaks
+    SquareX:		 .res  1                ; Args for DrawSquare
+    SquareY:		 .res  1
+    Width:			 .res  1
+    Height:			 .res  1
+
+
 ScratchEnd:
 
 
@@ -116,12 +133,47 @@ endOfBasic:     .word 00                            ;   the +7 expression above,
 start:          cld
                 jsr InitVariables       ; Since we can be in ROM, zero stuff out
                 jsr ClearScreen         
+				jsr ClearOffscreenBuffer
 
                 ldy #>startstr          ; Output exiting text and exit
                 lda #<startstr
                 jsr WriteLine
 
-                ; Do stuff here
+                lda #12
+                sta SquareX
+                lda #0
+                sta SquareY
+                lda #15
+                sta Width
+                lda #24
+                sta Height
+                jsr DrawSquare
+
+				lda #1
+				sta SquareX
+				lda #2
+				sta SquareY
+				lda #37
+				sta Width
+				lda #20
+				sta Height
+:				jsr DrawSquare
+				inc SquareX
+				inc SquareY
+				dec Width
+				dec Width
+				dec Height
+				dec Height
+				bne :-
+
+				jsr PublishOffscreenBuffer
+
+: 				jsr GETIN				; Keyboard Handling
+				cmp #0
+				beq :-
+
+				cmp #$03
+				bne :-
 
                 ldy #>exitstr           ; Output exiting text and exit
                 lda #<exitstr
@@ -148,37 +200,36 @@ InitVariables:  ldx #ScratchEnd-ScratchStart
 
 
 ;-----------------------------------------------------------------------------------
-; GetCursorAddr - Returns address of X/Y position on screen
+; GetCursorAddr - Returns address of X/Y positionon screen
 ;-----------------------------------------------------------------------------------
-;       IN  X:  X pos
+;		IN  X:	X pos
 ;       IN  Y:  Y pos
 ;       OUT X:  lsb of address
 ;       OUT Y:  msb of address
 ;-----------------------------------------------------------------------------------
 
-GetCursorAddr:  stx temp
-.if COLUMNS=80
-                asl temp                ; We have 80 columns, so double X
-.endif
-                ldx #COLUMNS
-                jsr Multiply            ; Result of Y*COLUMNS in AY
-                sta resultLo
-                sty resultHi
-                lda resultLo
-                clc
-                adc #<SCREEN_MEM
-                bcc nocarry
-                inc resultHi
-                clc
-nocarry:        adc temp
-                sta resultLo
-                lda resultHi
-                adc #>SCREEN_MEM
-                sta resultHi
-                ldx resultLo
-                ldy resultHi
-                rts
+ScreenLineAddresses:
 
+.word			 0 * COLUMNS,  1 * COLUMNS,  2 * COLUMNS,  3 * COLUMNS 
+.word            4 * COLUMNS,  5 * COLUMNS,  6 * COLUMNS,  7 * COLUMNS
+.word			 8 * COLUMNS,  9 * COLUMNS, 10 * COLUMNS, 11 * COLUMNS 
+.word           12 * COLUMNS, 13 * COLUMNS, 14 * COLUMNS, 15 * COLUMNS
+.word 			16 * COLUMNS, 17 * COLUMNS, 18 * COLUMNS, 19 * COLUMNS 
+.word           20 * COLUMNS, 21 * COLUMNS, 22 * COLUMNS, 23 * COLUMNS
+.word			24 * COLUMNS
+
+GetCursorAddr:  stx temp
+				tya
+				asl
+				tay
+				clc
+				lda ScreenLineAddresses,y
+				adc temp
+				tax
+				lda ScreenLineAddresses+1,y
+				adc #0
+				tay
+				rts
 ;-----------------------------------------------------------------------------------
 ; Multiply      Multiplies X * Y == ResultLo/ResultHi
 ;-----------------------------------------------------------------------------------
@@ -254,5 +305,216 @@ RepeatChar:     jsr CHROUT
                 bne RepeatChar
                 rts
 
+;-----------------------------------------------------------------------------------
+; SymbolTable	- All 16 combinations of lines and what PETSCII char they map to
+;-----------------------------------------------------------------------------------
+
+SymbolTable:	.byte 32
+				.byte 0
+				.byte 0
+				.byte 93		; VLINESYMBOL_ID
+				.byte 0
+				.byte 110		; BOTTOMLEFTSYMBOL_ID
+				.byte 125		; TOPLEFTSYMBOL_ID
+				.byte 115
+				.byte 0
+				.byte 112		; BOTTOMRIGHTSYMBOL_ID
+				.byte 109		; TOPRIGHTSYMBOL_ID
+				.byte 107
+				.byte 64		; HLINESYMBOL_ID
+				.byte 114
+				.byte 113
+				.byte 91
+
+				; The above table must represent a full 4 bits, and hence is 16 bytes
+
+				.assert * = SymbolTable + 16, error
+
+;-----------------------------------------------------------------------------------
+; DrawSquare
+;-----------------------------------------------------------------------------------
+; Draw a square on the offscreen buffer.
+;
+; TopLeftX
+; TopLeftY
+; Width
+; Height
+;-----------------------------------------------------------------------------------
+
+DrawSquare:		ldx		SquareX
+				ldy		SquareY
+				lda		#TOPLEFTSYMBOL_ID
+				jsr		OutputSymbolXY
+
+				lda		Width
+				jsr		DrawHLine
+
+				lda		Height
+				jsr		DrawVLine
+
+				lda		SquareX
+				clc
+				adc		Width
+				tax
+				ldy		SquareY
+				lda		#TOPRIGHTSYMBOL_ID
+				jsr		OutputSymbolXY
+				lda		Height
+				jsr		DrawVLine
+
+				ldx		SquareX
+				lda		SquareY
+				clc
+				adc		Height
+				tay
+				lda		#BOTTOMLEFTSYMBOL_ID
+				jsr		OutputSymbolXY
+				lda		Width
+				jsr		DrawHLine
+
+				lda     SquareX
+				clc
+				adc		Width
+				tax	
+				lda		SquareY
+				clc
+				adc		Height
+				tay		
+				lda		#BOTTOMRIGHTSYMBOL_ID
+				jsr		OutputSymbolXY
+				
+				rts
+
+;-----------------------------------------------------------------------------------
+; OutputSymbolXY	Merges the given symbol A into the offscreen buffer at pos X, Y
+;-----------------------------------------------------------------------------------
+;				X		X Coord	[PRESERVED]
+;				Y		Y Coord [PRESERVED]
+;				A		Symbol
+;-----------------------------------------------------------------------------------
+; The merge into the buffer is done by or'ing the symbol ID, yielding a new 4-bit
+; symbol ID in the slot.
+;-----------------------------------------------------------------------------------
+		
+OutputSymbolXY:	sta		temp2
+				txa
+				pha
+				tya
+				pha
+				jsr		GetCursorAddr
+				txa		
+				clc
+				adc		#<OffscreenBuffer
+				sta		zptmp
+				tya
+				adc		#>OffscreenBuffer
+				sta		zptmp+1
+				ldy		#0
+				lda		(zptmp),y
+				ora		temp2
+				sta		(zptmp),y
+				pla
+				tay
+				pla
+				tax
+				rts
+
+;-----------------------------------------------------------------------------------
+; DrawHLine		Draws a horizontal line in the offscreen buffer
+;-----------------------------------------------------------------------------------
+;				X		X Coord of Start
+;				Y		Y Coord of Start
+;				A		Length of line
+;-----------------------------------------------------------------------------------
+			
+DrawHLine:		; from X+1, Y to X-1, Y
+				sec
+				sbc #1						; Two less than full length due to corners
+				sta temp3
+				txa
+				pha
+				beq hdone
+:				inx
+				lda #HLINESYMBOL_ID
+				jsr	OutputSymbolXY
+				dec temp3
+				bne :-
+hdone:			pla
+				tax
+				rts
+
+DrawVLine:		; from X, Y+1 to X, Y-1
+				sec
+				sbc #1
+				sta temp3
+				tya
+				pha
+				beq vdone
+:				iny
+				lda #VLINESYMBOL_ID
+				jsr OutputSymbolXY
+				dec temp3
+				bne :-
+vdone:  		pla
+				tay
+				rts
+
+;-----------------------------------------------------------------------------------
+; ClearOffscreenBuffer
+;-----------------------------------------------------------------------------------
+; Clears the contents of the offscreen buffer to 0 (not 32, as you would the screen)
+;-----------------------------------------------------------------------------------
+
+ClearOffscreenBuffer:
+				ldx #$00
+:      			lda	#$00
+				sta OffscreenBuffer, x
+				sta OffscreenBuffer + $100, x
+				sta OffscreenBuffer + $200, x
+				sta OffscreenBuffer + $2E8, x
+				inx
+				bne :-
+				rts
+
+;-----------------------------------------------------------------------------------
+; PublishOffscreenBuffer
+;-----------------------------------------------------------------------------------
+; Copies the offscreen buffer to the display screen while translating from the 
+; SymbolID at each location to PETSCII screen codes
+;-----------------------------------------------------------------------------------
+
+PublishOffscreenBuffer:
+
+				ldx #$00
+
+:   			lda	OffscreenBuffer, x
+				tay
+				lda SymbolTable,y
+				sta SCREEN_MEM, x
+
+				lda	OffscreenBuffer + $100, x
+				tay
+				lda SymbolTable,y
+				sta SCREEN_MEM + $100, x
+
+				lda	OffscreenBuffer + $200, x
+				tay
+				lda SymbolTable,y
+				sta SCREEN_MEM + $200, x
+
+				lda	OffscreenBuffer + $2E8, x
+				tay
+				lda SymbolTable,y
+				sta SCREEN_MEM + $2E8, x
+
+				inx
+				bne :-
+				rts
+
+
 startstr:       .literal "STARTING...", 13, 0
 exitstr:        .literal "EXITING...", 13, 0
+
+OffscreenBuffer: 
+                .byte 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
+				.res  1024,$EE
