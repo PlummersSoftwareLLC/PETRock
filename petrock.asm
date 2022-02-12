@@ -10,7 +10,6 @@
 
 DEBUG               = 1                 ; Enable code that only is included for debug builds
 EPROM               = 0                 ; When TRUE, no BASIC stub, no load address in file
-COLUMNS             = 80                ; Screen width, either 40 or 80
 
 SERIAL_BUF_LEN      = 40                ; How many input characters we can accept
 

@@ -2,6 +2,8 @@
 ; Definitions for the COMMODORE PET
 ;----------------------------------------------------------------------------
 
+    COLUMNS       = 80      ; Screen width, either 40 or 80
+
     SCRATCH_START = $033A   ; Second cassette buffer on PET
     SCRATCH_END   = $03F9   ; End of cassette buffer  
 	SCREEN_MEM    = $8000

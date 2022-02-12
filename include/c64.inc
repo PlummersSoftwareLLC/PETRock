@@ -1,6 +1,8 @@
 ;----------------------------------------------------------------------------
 ; Definitions for the C64
 ;----------------------------------------------------------------------------
+    COLUMNS       = 40      ; Screen width, either 40 or 80
+
     SCRATCH_START = $033C   ; Second cassette buffer on PET
     SCRATCH_END   = $03FB   ; End of cassette buffer  
 
