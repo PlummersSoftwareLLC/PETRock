@@ -8,8 +8,6 @@
 
 ; Definitions -----------------------------------------------------------------------
 
-PET             = 1
-C64             = !PET              ; Either PET or C64
 DEBUG           = 1                 ; Enable code that only is included for debug builds
 EPROM           = 0                 ; When TRUE, no BASIC stub, no load address in file
 COLUMNS         = 40                ; Screen width, either 40 or 80
@@ -24,29 +22,28 @@ SECOND_JIFFIES  = 60                ; Number of jiffies in a second
 
 NUM_BANDS       = 16                ; 16 bands in the spectrum data
 
+PET = 1
+
 ; System Locations ------------------------------------------------------------------
 
-.if C64
-    SCREEN_MEM  = $0400
-    COLOR_MEM   = $D800
+.INCLUDE "common.inc"
+
+.if PET
+    .INCLUDE "kernal.inc"
+    .INCLUDE "c64.inc"
     .if EPROM
         BASE    = $8000     ; Open C64 ROM space (not re)
     .else
         BASE    = $0801     ; C64 Start of BASIC
     .endif
-    SCRATCH_START = $033C   ; Start of cassette Buffer on C64
-    SCRATCH_END   = $03FB   ; End of cassette buffer 
 .else
     .INCLUDE "pet.inc"
-    .INCLUDE "basic4.inc"
-    SCREEN_MEM  = $8000
+    .INCLUDE "petbasic4.inc"
     .if EPROM
         BASE    = $B000     ; Open PET ROM space
     .else
         BASE    = $0401     ; PET Start of BASIC
     .endif
-    SCRATCH_START = $033A   ; Second cassette buffer on PET
-    SCRATCH_END   = $03F9   ; End of cassette buffer    
 .endif
 
 JIFFY_TIMER = $008F
@@ -118,6 +115,7 @@ endOfBasic:     .word 00                            ;   the +7 expression above,
 
 start:          cld
                 jsr InitVariables       ; Since we can be in ROM, zero stuff out
+                jsr ClearScreen         
 
                 ldy #>startstr          ; Output exiting text and exit
                 lda #<startstr
@@ -148,35 +146,6 @@ InitVariables:  ldx #ScratchEnd-ScratchStart
 
                 rts
 
-
-;----------------------------------------------------------------------------
-; SendCommand
-;----------------------------------------------------------------------------
-; Sends a command to a device
-;----------------------------------------------------------------------------
-
-CommandText:     .literal "T-RI",0      ; Command to read RTC in the petSD+
-
-SendCommand:    stx zptmpC
-                sty zptmpC+1
-
-                lda #DEVICE_NUM         ; Device 8 or 9, etc
-                sta DN
-                lda #$6f                ; DATA SA 15 (Must have $#60 or'd in)
-                sta SA
-                jsr LISTN               ; LISTEN
-                lda SA
-                jsr SECND               ; send secondary address
-                ldy #0
-:               lda (zptmpC), y
-                beq @done
-                jsr CIOUT               ; send char to IEEE
-                iny
-                bne :-
-
-@done:
-                jsr UNLSN               ; Unlisten
-                rts
 
 ;-----------------------------------------------------------------------------------
 ; GetCursorAddr - Returns address of X/Y position on screen
@@ -241,11 +210,20 @@ enterLoop:      lsr MultiplyTemp
 ;-----------------------------------------------------------------------------------
 ; ClearScreen
 ;-----------------------------------------------------------------------------------
-;           X:  lsb of address of null-terminated string
-;           A:  msb of address
-;-----------------------------------------------------------------------------------
 
-ClearScreen:    jmp CLRSCR
+ClearScreen:    lda #$93
+                jsr CHROUT    
+                rts
+
+                lda #$20
+                ldx #$00
+ :              sta SCREEN_MEM, x
+                sta SCREEN_MEM + $100, x
+                sta SCREEN_MEM + $200, x
+                sta SCREEN_MEM + $300, x
+                dex
+                bne :-
+                rts
 
 ;-----------------------------------------------------------------------------------
 ; WriteLine - Writes a line of text to the screen using CHROUT ($FFD2)
