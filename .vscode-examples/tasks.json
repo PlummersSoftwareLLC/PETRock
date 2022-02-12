@@ -1,0 +1,76 @@
+{
+    // Assuming cl65 and VICE are properly on your PATH, these tasks should allow you to assemble and test for both C64 and PET from
+    // withing Visual Studio Code.
+    //
+    // This is my first ever attempt at a tasks.json file, so if it works, print it out and hang it on the fridge! (Davepl)
+
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build for PET",
+            "type": "shell",
+            "command": "cl65",
+            "args": [
+                "--verbose",
+                "--asm-define PET=1",
+                "--asm-define C64=0",
+                "--asm-include-dir=include",
+                "-o petrock.prg",
+                "--cpu 65c02",
+                "-t none",
+                "${file}"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "clear": true
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Build for C64",
+            "type": "shell",
+            "command": "cl65 --verbose  --asm-include-dir include --asm-define PET=0 --asm-define C64=1 -o c64rock.prg --cpu 65c02 -t none ${file}",
+            "args": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "clear": true
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Run on PET",
+            "type": "shell",
+            "command": "xpet -model 8032 petrock.prg ",
+            "args": [],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "clear": true
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Run on C64",
+            "type": "shell",
+            "command": "x64sc c64rock.prg ",
+            "args": [],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "clear": true
+            },
+            "problemMatcher": "$msCompile"
+        }
+
+    ]
+}
