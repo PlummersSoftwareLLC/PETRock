@@ -14,18 +14,24 @@ Towards the top of the [`petrock.asm`](petclock.asm) file, a number of symbols a
 
 This repository's code targets the ca65 assembler and cl65 linker that are part of the [cc65](https://cc65.github.io/) GitHub project. You will need a fairly recent build of cc65 for assembly of this repository's contents to work.
 
-With the cc65 toolkit installed and in your PATH, you can build the application using the following command:
+With the cc65 toolkit installed and in your PATH, you can build the application using one of the following commands:
 
 ```text
-cl65 -o petrock.prg -t none petrock.asm
+For the PET:
+cl65 --verbose  --asm-include-dir include --asm-define PET=1 --asm-define C64=0 -o petrock.prg --cpu 65c02 -t none petrock.asm
+
+For the C64:
+cl65 --verbose  --asm-include-dir include --asm-define PET=0 --asm-define C64=1 -o c64rock.prg --cpu 65c02 -t none petrock.asm
 ```
 
 ## Loading and running
 
-Assuming the petrock.prg file is on a disk in device 8, the clock can be loaded using the following command:
+Assuming the petrock.prg or c64rock.prg file is on a disk in device 8, the clock can be loaded using the following command:
 
 ```text
 LOAD "PETROCK.PRG",8
+or
+LOAD "c64ROCK.PRG",8
 ```
 
 ## 6502 assembly
