@@ -21,7 +21,6 @@
 .SETCPU "65C02"
 
 ; Definitions -----------------------------------------------------------------------
-PET             = 1
 DEBUG           = 1					; Enable code that only is included for debug builds
 EPROM           = 0					; When TRUE, no BASIC stub, no load address in file
 PETSDPLUS       = 0                 ; When TRUE, read RTC from petSD+
