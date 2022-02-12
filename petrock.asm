@@ -10,7 +10,7 @@
 
 DEBUG               = 1                 ; Enable code that only is included for debug builds
 EPROM               = 0                 ; When TRUE, no BASIC stub, no load address in file
-COLUMNS             = 40                ; Screen width, either 40 or 80
+COLUMNS             = 80                ; Screen width, either 40 or 80
 
 SERIAL_BUF_LEN      = 40                ; How many input characters we can accept
 
@@ -140,11 +140,11 @@ start:          cld
                 lda #<startstr
                 jsr WriteLine
 
-				lda #1
+				lda #0
 				sta SquareX
 				lda #2
 				sta SquareY
-				lda #37
+				lda #COLUMNS-1
 				sta Width
 				lda #20
 				sta Height
@@ -418,7 +418,7 @@ DrawHLine:		; from X+1, Y to X-1, Y
 				sta temp3
 				txa
 				pha
-				beq hdone
+;				beq hdone
 :				inx
 				lda #HLINESYMBOL
 				jsr	OutputSymbolXY
