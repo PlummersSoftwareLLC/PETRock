@@ -8,28 +8,29 @@
 
 ; Definitions -----------------------------------------------------------------------
 
-DEBUG           = 1                 ; Enable code that only is included for debug builds
-EPROM           = 0                 ; When TRUE, no BASIC stub, no load address in file
-COLUMNS         = 40                ; Screen width, either 40 or 80
+DEBUG               = 1                 ; Enable code that only is included for debug builds
+EPROM               = 0                 ; When TRUE, no BASIC stub, no load address in file
+COLUMNS             = 40                ; Screen width, either 40 or 80
 
-SERIAL_BUF_LEN  = 40                ; How many input characters we can accept
+SERIAL_BUF_LEN      = 40                ; How many input characters we can accept
 
 ; Defines below this line should generally not require changing
 
-DEVICE_NUM      = 2
-MINUTE_JIFFIES  = 3600              ; Number of jiffies in a minute
-SECOND_JIFFIES  = 60                ; Number of jiffies in a second
+DEVICE_NUM          = 2
+MINUTE_JIFFIES      = 3600              ; Number of jiffies in a minute
+SECOND_JIFFIES      = 60                ; Number of jiffies in a second
 
-NUM_BANDS       = 16                ; 16 bands in the spectrum data
+NUM_BANDS           = 16                ; 16 bands in the spectrum data
 
 ; Symbol definitions for square drawing
 
-TOPLEFTSYMBOL_ID		= %1001		; 6	
-TOPRIGHTSYMBOL_ID		= %0101		; 10
-BOTTOMLEFTSYMBOL_ID		= %1010		; 5
-BOTTOMRIGHTSYMBOL_ID	= %0110		; 9
-HLINESYMBOL_ID			= %1100		; 
-VLINESYMBOL_ID			= %0011
+TOPLEFTSYMBOL		= 112               ; PETSCI for graphics that make a square 
+BOTTOMRIGHTSYMBOL	= 125
+TOPRIGHTSYMBOL		= 110
+BOTTOMLEFTSYMBOL	= 109
+
+HLINESYMBOL			= 64
+VLINESYMBOL			= 93
 
 ; System Locations ------------------------------------------------------------------
 
@@ -73,6 +74,7 @@ ScratchStart:
     temp:            .res  1                ; General scratch variable
     temp2:           .res  1                ; Second  scratch variable
     temp3:           .res  1                ; Third scratch variable
+    temp4:           .res  1                ; Fourth scratch variable
     MultiplyTemp:    .res  1                ; Scratch variable for multiply code
     resultLo:        .res  1                ; Results from multiply operations
     resultHi:        .res  1                
@@ -133,21 +135,10 @@ endOfBasic:     .word 00                            ;   the +7 expression above,
 start:          cld
                 jsr InitVariables       ; Since we can be in ROM, zero stuff out
                 jsr ClearScreen         
-				jsr ClearOffscreenBuffer
 
                 ldy #>startstr          ; Output exiting text and exit
                 lda #<startstr
                 jsr WriteLine
-
-                lda #12
-                sta SquareX
-                lda #0
-                sta SquareY
-                lda #15
-                sta Width
-                lda #24
-                sta Height
-                jsr DrawSquare
 
 				lda #1
 				sta SquareX
@@ -166,7 +157,6 @@ start:          cld
 				dec Height
 				bne :-
 
-				jsr PublishOffscreenBuffer
 
 : 				jsr GETIN				; Keyboard Handling
 				cmp #0
@@ -200,7 +190,7 @@ InitVariables:  ldx #ScratchEnd-ScratchStart
 
 
 ;-----------------------------------------------------------------------------------
-; GetCursorAddr - Returns address of X/Y positionon screen
+; GetCursorAddr - Returns address of X/Y position on screen
 ;-----------------------------------------------------------------------------------
 ;		IN  X:	X pos
 ;       IN  Y:  Y pos
@@ -210,16 +200,16 @@ InitVariables:  ldx #ScratchEnd-ScratchStart
 
 ScreenLineAddresses:
 
-.word			 0 * COLUMNS,  1 * COLUMNS,  2 * COLUMNS,  3 * COLUMNS 
-.word            4 * COLUMNS,  5 * COLUMNS,  6 * COLUMNS,  7 * COLUMNS
-.word			 8 * COLUMNS,  9 * COLUMNS, 10 * COLUMNS, 11 * COLUMNS 
-.word           12 * COLUMNS, 13 * COLUMNS, 14 * COLUMNS, 15 * COLUMNS
-.word 			16 * COLUMNS, 17 * COLUMNS, 18 * COLUMNS, 19 * COLUMNS 
-.word           20 * COLUMNS, 21 * COLUMNS, 22 * COLUMNS, 23 * COLUMNS
-.word			24 * COLUMNS
+.word			SCREEN_MEM +  0 * COLUMNS, SCREEN_MEM +  1 * COLUMNS, SCREEN_MEM +  2 * COLUMNS, SCREEN_MEM +  3 * COLUMNS 
+.word           SCREEN_MEM +  4 * COLUMNS, SCREEN_MEM +  5 * COLUMNS, SCREEN_MEM +  6 * COLUMNS, SCREEN_MEM +  7 * COLUMNS
+.word			SCREEN_MEM +  8 * COLUMNS, SCREEN_MEM +  9 * COLUMNS, SCREEN_MEM + 10 * COLUMNS, SCREEN_MEM + 11 * COLUMNS 
+.word           SCREEN_MEM + 12 * COLUMNS, SCREEN_MEM + 13 * COLUMNS, SCREEN_MEM + 14 * COLUMNS, SCREEN_MEM + 15 * COLUMNS
+.word 			SCREEN_MEM + 16 * COLUMNS, SCREEN_MEM + 17 * COLUMNS, SCREEN_MEM + 18 * COLUMNS, SCREEN_MEM + 19 * COLUMNS 
+.word           SCREEN_MEM + 20 * COLUMNS, SCREEN_MEM + 21 * COLUMNS, SCREEN_MEM + 22 * COLUMNS, SCREEN_MEM + 23 * COLUMNS
+.word			SCREEN_MEM + 24 * COLUMNS
 
 GetCursorAddr:  stx temp
-				tya
+             	tya
 				asl
 				tay
 				clc
@@ -237,8 +227,7 @@ GetCursorAddr:  stx temp
 ;               Y       8 bit value in
 ;-----------------------------------------------------------------------------------
 
-Multiply:
-                stx resultLo
+Multiply:       stx resultLo
                 sty MultiplyTemp
                 lda #$00
                 tay
@@ -343,7 +332,7 @@ SymbolTable:	.byte 32
 
 DrawSquare:		ldx		SquareX
 				ldy		SquareY
-				lda		#TOPLEFTSYMBOL_ID
+				lda		#TOPLEFTSYMBOL
 				jsr		OutputSymbolXY
 
 				lda		Width
@@ -357,7 +346,7 @@ DrawSquare:		ldx		SquareX
 				adc		Width
 				tax
 				ldy		SquareY
-				lda		#TOPRIGHTSYMBOL_ID
+				lda		#TOPRIGHTSYMBOL
 				jsr		OutputSymbolXY
 				lda		Height
 				jsr		DrawVLine
@@ -367,7 +356,7 @@ DrawSquare:		ldx		SquareX
 				clc
 				adc		Height
 				tay
-				lda		#BOTTOMLEFTSYMBOL_ID
+				lda		#BOTTOMLEFTSYMBOL
 				jsr		OutputSymbolXY
 				lda		Width
 				jsr		DrawHLine
@@ -380,39 +369,35 @@ DrawSquare:		ldx		SquareX
 				clc
 				adc		Height
 				tay		
-				lda		#BOTTOMRIGHTSYMBOL_ID
+				lda		#BOTTOMRIGHTSYMBOL
 				jsr		OutputSymbolXY
 				
 				rts
 
 ;-----------------------------------------------------------------------------------
-; OutputSymbolXY	Merges the given symbol A into the offscreen buffer at pos X, Y
+; OutputSymbolXY	Draws the given symbol A into the screen at pos X, Y
 ;-----------------------------------------------------------------------------------
 ;				X		X Coord	[PRESERVED]
 ;				Y		Y Coord [PRESERVED]
 ;				A		Symbol
 ;-----------------------------------------------------------------------------------
-; The merge into the buffer is done by or'ing the symbol ID, yielding a new 4-bit
-; symbol ID in the slot.
+; Unlike my original impl, this doesn't merge, so lines can't intersect, but this
+; way no intermediate buffer is required and it draws right to the screen directly.
 ;-----------------------------------------------------------------------------------
 		
-OutputSymbolXY:	sta		temp2
+OutputSymbolXY:	sta		temp4
 				txa
 				pha
 				tya
 				pha
-				jsr		GetCursorAddr
-				txa		
-				clc
-				adc		#<OffscreenBuffer
-				sta		zptmp
-				tya
-				adc		#>OffscreenBuffer
-				sta		zptmp+1
-				ldy		#0
-				lda		(zptmp),y
-				ora		temp2
-				sta		(zptmp),y
+				
+                jsr		GetCursorAddr
+                stx     zptmp
+                sty     zptmp+1
+                ldy     #0
+                lda     temp4
+                sta     (zptmp),y
+
 				pla
 				tay
 				pla
@@ -435,7 +420,7 @@ DrawHLine:		; from X+1, Y to X-1, Y
 				pha
 				beq hdone
 :				inx
-				lda #HLINESYMBOL_ID
+				lda #HLINESYMBOL
 				jsr	OutputSymbolXY
 				dec temp3
 				bne :-
@@ -451,64 +436,12 @@ DrawVLine:		; from X, Y+1 to X, Y-1
 				pha
 				beq vdone
 :				iny
-				lda #VLINESYMBOL_ID
+				lda #VLINESYMBOL
 				jsr OutputSymbolXY
 				dec temp3
 				bne :-
 vdone:  		pla
 				tay
-				rts
-
-;-----------------------------------------------------------------------------------
-; ClearOffscreenBuffer
-;-----------------------------------------------------------------------------------
-; Clears the contents of the offscreen buffer to 0 (not 32, as you would the screen)
-;-----------------------------------------------------------------------------------
-
-ClearOffscreenBuffer:
-				ldx #$00
-:      			lda	#$00
-				sta OffscreenBuffer, x
-				sta OffscreenBuffer + $100, x
-				sta OffscreenBuffer + $200, x
-				sta OffscreenBuffer + $2E8, x
-				inx
-				bne :-
-				rts
-
-;-----------------------------------------------------------------------------------
-; PublishOffscreenBuffer
-;-----------------------------------------------------------------------------------
-; Copies the offscreen buffer to the display screen while translating from the 
-; SymbolID at each location to PETSCII screen codes
-;-----------------------------------------------------------------------------------
-
-PublishOffscreenBuffer:
-
-				ldx #$00
-
-:   			lda	OffscreenBuffer, x
-				tay
-				lda SymbolTable,y
-				sta SCREEN_MEM, x
-
-				lda	OffscreenBuffer + $100, x
-				tay
-				lda SymbolTable,y
-				sta SCREEN_MEM + $100, x
-
-				lda	OffscreenBuffer + $200, x
-				tay
-				lda SymbolTable,y
-				sta SCREEN_MEM + $200, x
-
-				lda	OffscreenBuffer + $2E8, x
-				tay
-				lda SymbolTable,y
-				sta SCREEN_MEM + $2E8, x
-
-				inx
-				bne :-
 				rts
 
 
