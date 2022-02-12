@@ -1,4 +1,5 @@
 # PET Rock
+[![CI](https://github.com/PlummersSoftwareLLC/PETRock/actions/workflows/CI.yml/badge.svg)](https://github.com/PlummersSoftwareLLC/PETRock/actions/workflows/CI.yml)
 
 A spectrum analyzer display for the PET and C64 that receives its data from an ESP32 MCU on the user port that does the audio processing, FFT, etc.
 
