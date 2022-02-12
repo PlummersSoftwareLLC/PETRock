@@ -17,7 +17,8 @@ This repository's code targets the ca65 assembler and cl65 linker that are part 
 With the cc65 toolkit installed and in your PATH, you can build the application using the following command:
 
 ```text
-cl65 -o petrock.prg -t none petrock.asm
+cl65 --verbose  --asm-include-dir include --asm-define PET=1 --asm-define C64=0 -o petrock.prg --cpu 65c02 -t none petrock.asm
+cl65 --verbose  --asm-include-dir include --asm-define PET=0 --asm-define C64=1 -o c64rock.prg --cpu 65c02 -t none petrock.asm
 ```
 
 ## Loading and running
@@ -26,6 +27,8 @@ Assuming the petrock.prg file is on a disk in device 8, the clock can be loaded 
 
 ```text
 LOAD "PETROCK.PRG",8
+or
+LOAD "c64ROCK.PRG",8
 ```
 
 ## 6502 assembly
