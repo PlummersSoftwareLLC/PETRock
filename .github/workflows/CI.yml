@@ -22,5 +22,5 @@ jobs:
         git checkout 6ac4aa4e2076189ad5b5f3a9d33e1c5910d4e37c
         make
 
-    - name: "Assemble PETClock"
-      run: cc65/bin/cl65 petclock.asm -t none
+    - name: "Assemble PETRock"
+      run: cc65/bin/cl65 petrock.asm -t none
