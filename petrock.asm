@@ -22,21 +22,21 @@ SECOND_JIFFIES  = 60                ; Number of jiffies in a second
 
 NUM_BANDS       = 16                ; 16 bands in the spectrum data
 
-PET = 1
-
 ; System Locations ------------------------------------------------------------------
 
 .INCLUDE "common.inc"
 
-.if PET
-    .INCLUDE "kernal.inc"
+.if C64
     .INCLUDE "c64.inc"
+    .INCLUDE "kernal.inc"
     .if EPROM
         BASE    = $8000     ; Open C64 ROM space (not re)
     .else
         BASE    = $0801     ; C64 Start of BASIC
     .endif
-.else
+.endif
+
+.if PET
     .INCLUDE "pet.inc"
     .INCLUDE "petbasic4.inc"
     .if EPROM

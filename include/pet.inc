@@ -34,3 +34,5 @@
 	MEMUSS		= $fd	; tape load temps
 
 ;----------------------------------------------------------------------------
+
+	CHROUT	= $FFD2         ; Output a character
