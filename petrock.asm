@@ -39,10 +39,8 @@ VLINESYMBOL			= 93
     PET         = 0
 .endif
 
-.if ((.not PET) .and (.not C64))
-    .fatal "Define either PET or C64 to 1."
-.elseif (PET .and C64)
-    .fatal "Define either PET or C64 to 1, but not both."
+.if (.not (PET .xor C64))
+    .fatal "Define exactly one of PET or C64 to equal 1."
 .endif
 
 .INCLUDE "common.inc"
