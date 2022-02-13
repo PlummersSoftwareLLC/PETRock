@@ -4,8 +4,6 @@
 ; (c) Dave Plummer, 02/11/2022 Initial commit
 ;-----------------------------------------------------------------------------------
 
-.SETCPU "65C02"
-
 ; Definitions -----------------------------------------------------------------------
 
 DEBUG               = 1                 ; Enable code that only is included for debug builds
@@ -32,6 +30,20 @@ HLINESYMBOL			= 64
 VLINESYMBOL			= 93
 
 ; System Locations ------------------------------------------------------------------
+
+.ifndef C64
+    C64         = 0
+.endif
+
+.ifndef PET
+    PET         = 0
+.endif
+
+.if ((.not PET) .and (.not C64))
+    .fatal "Define either PET or C64 to 1."
+.elseif (PET .and C64)
+    .fatal "Define either PET or C64 to 1, but not both."
+.endif
 
 .INCLUDE "common.inc"
 
@@ -139,30 +151,30 @@ start:          cld
                 lda #<startstr
                 jsr WriteLine
 
-				lda #0
-				sta SquareX
-				lda #2
-				sta SquareY
-				lda #COLUMNS-1
-				sta Width
-				lda #20
-				sta Height
+                lda #0
+                sta SquareX
+                lda #2
+                sta SquareY
+                lda #COLUMNS-1
+                sta Width
+                lda #20
+                sta Height
 :				jsr DrawSquare
-				inc SquareX
-				inc SquareY
-				dec Width
-				dec Width
-				dec Height
-				dec Height
-				bne :-
+                inc SquareX
+                inc SquareY
+                dec Width
+                dec Width
+                dec Height
+                dec Height
+                bne :-
 
 
 : 				jsr GETIN				; Keyboard Handling
-				cmp #0
-				beq :-
+                cmp #0
+                beq :-
 
-				cmp #$03
-				bne :-
+                cmp #$03
+                bne :-
 
                 ldy #>exitstr           ; Output exiting text and exit
                 lda #<exitstr
@@ -208,17 +220,17 @@ ScreenLineAddresses:
 .word			SCREEN_MEM + 24 * COLUMNS
 
 GetCursorAddr:  stx temp
-             	tya
-				asl
-				tay
-				clc
-				lda ScreenLineAddresses,y
-				adc temp
-				tax
-				lda ScreenLineAddresses+1,y
-				adc #0
-				tay
-				rts
+                 tya
+                asl
+                tay
+                clc
+                lda ScreenLineAddresses,y
+                adc temp
+                tax
+                lda ScreenLineAddresses+1,y
+                adc #0
+                tay
+                rts
 ;-----------------------------------------------------------------------------------
 ; Multiply      Multiplies X * Y == ResultLo/ResultHi
 ;-----------------------------------------------------------------------------------
@@ -298,25 +310,25 @@ RepeatChar:     jsr CHROUT
 ;-----------------------------------------------------------------------------------
 
 SymbolTable:	.byte 32
-				.byte 0
-				.byte 0
-				.byte 93		; VLINESYMBOL_ID
-				.byte 0
-				.byte 110		; BOTTOMLEFTSYMBOL_ID
-				.byte 125		; TOPLEFTSYMBOL_ID
-				.byte 115
-				.byte 0
-				.byte 112		; BOTTOMRIGHTSYMBOL_ID
-				.byte 109		; TOPRIGHTSYMBOL_ID
-				.byte 107
-				.byte 64		; HLINESYMBOL_ID
-				.byte 114
-				.byte 113
-				.byte 91
+                .byte 0
+                .byte 0
+                .byte 93		; VLINESYMBOL_ID
+                .byte 0
+                .byte 110		; BOTTOMLEFTSYMBOL_ID
+                .byte 125		; TOPLEFTSYMBOL_ID
+                .byte 115
+                .byte 0
+                .byte 112		; BOTTOMRIGHTSYMBOL_ID
+                .byte 109		; TOPRIGHTSYMBOL_ID
+                .byte 107
+                .byte 64		; HLINESYMBOL_ID
+                .byte 114
+                .byte 113
+                .byte 91
 
-				; The above table must represent a full 4 bits, and hence is 16 bytes
+                ; The above table must represent a full 4 bits, and hence is 16 bytes
 
-				.assert * = SymbolTable + 16, error
+                .assert * = SymbolTable + 16, error
 
 ;-----------------------------------------------------------------------------------
 ; DrawSquare
@@ -330,48 +342,48 @@ SymbolTable:	.byte 32
 ;-----------------------------------------------------------------------------------
 
 DrawSquare:		ldx		SquareX
-				ldy		SquareY
-				lda		#TOPLEFTSYMBOL
-				jsr		OutputSymbolXY
+                ldy		SquareY
+                lda		#TOPLEFTSYMBOL
+                jsr		OutputSymbolXY
 
-				lda		Width
-				jsr		DrawHLine
+                lda		Width
+                jsr		DrawHLine
 
-				lda		Height
-				jsr		DrawVLine
+                lda		Height
+                jsr		DrawVLine
 
-				lda		SquareX
-				clc
-				adc		Width
-				tax
-				ldy		SquareY
-				lda		#TOPRIGHTSYMBOL
-				jsr		OutputSymbolXY
-				lda		Height
-				jsr		DrawVLine
+                lda		SquareX
+                clc
+                adc		Width
+                tax
+                ldy		SquareY
+                lda		#TOPRIGHTSYMBOL
+                jsr		OutputSymbolXY
+                lda		Height
+                jsr		DrawVLine
 
-				ldx		SquareX
-				lda		SquareY
-				clc
-				adc		Height
-				tay
-				lda		#BOTTOMLEFTSYMBOL
-				jsr		OutputSymbolXY
-				lda		Width
-				jsr		DrawHLine
+                ldx		SquareX
+                lda		SquareY
+                clc
+                adc		Height
+                tay
+                lda		#BOTTOMLEFTSYMBOL
+                jsr		OutputSymbolXY
+                lda		Width
+                jsr		DrawHLine
 
-				lda     SquareX
-				clc
-				adc		Width
-				tax	
-				lda		SquareY
-				clc
-				adc		Height
-				tay		
-				lda		#BOTTOMRIGHTSYMBOL
-				jsr		OutputSymbolXY
-				
-				rts
+                lda     SquareX
+                clc
+                adc		Width
+                tax	
+                lda		SquareY
+                clc
+                adc		Height
+                tay		
+                lda		#BOTTOMRIGHTSYMBOL
+                jsr		OutputSymbolXY
+                
+                rts
 
 ;-----------------------------------------------------------------------------------
 ; OutputSymbolXY	Draws the given symbol A into the screen at pos X, Y
@@ -383,13 +395,13 @@ DrawSquare:		ldx		SquareX
 ; Unlike my original impl, this doesn't merge, so lines can't intersect, but this
 ; way no intermediate buffer is required and it draws right to the screen directly.
 ;-----------------------------------------------------------------------------------
-		
+        
 OutputSymbolXY:	sta		temp4
-				txa
-				pha
-				tya
-				pha
-				
+                txa
+                pha
+                tya
+                pha
+                
                 jsr		GetCursorAddr
                 stx     zptmp
                 sty     zptmp+1
@@ -397,11 +409,11 @@ OutputSymbolXY:	sta		temp4
                 lda     temp4
                 sta     (zptmp),y
 
-				pla
-				tay
-				pla
-				tax
-				rts
+                pla
+                tay
+                pla
+                tax
+                rts
 
 ;-----------------------------------------------------------------------------------
 ; DrawHLine		Draws a horizontal line in the offscreen buffer
@@ -410,38 +422,38 @@ OutputSymbolXY:	sta		temp4
 ;				Y		Y Coord of Start
 ;				A		Length of line
 ;-----------------------------------------------------------------------------------
-			
+            
 DrawHLine:		; from X+1, Y to X-1, Y
-				sec
-				sbc #1						; Two less than full length due to corners
-				sta temp3
-				txa
-				pha
+                sec
+                sbc #1						; Two less than full length due to corners
+                sta temp3
+                txa
+                pha
 ;				beq hdone
 :				inx
-				lda #HLINESYMBOL
-				jsr	OutputSymbolXY
-				dec temp3
-				bne :-
+                lda #HLINESYMBOL
+                jsr	OutputSymbolXY
+                dec temp3
+                bne :-
 hdone:			pla
-				tax
-				rts
+                tax
+                rts
 
 DrawVLine:		; from X, Y+1 to X, Y-1
-				sec
-				sbc #1
-				sta temp3
-				tya
-				pha
-				beq vdone
+                sec
+                sbc #1
+                sta temp3
+                tya
+                pha
+                beq vdone
 :				iny
-				lda #VLINESYMBOL
-				jsr OutputSymbolXY
-				dec temp3
-				bne :-
+                lda #VLINESYMBOL
+                jsr OutputSymbolXY
+                dec temp3
+                bne :-
 vdone:  		pla
-				tay
-				rts
+                tay
+                rts
 
 
 startstr:       .literal "STARTING...", 13, 0
@@ -449,4 +461,4 @@ exitstr:        .literal "EXITING...", 13, 0
 
 OffscreenBuffer: 
                 .byte 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15
-				.res  1024,$EE
+                .res  1024,$EE

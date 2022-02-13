@@ -13,10 +13,8 @@
             "args": [
                 "--verbose",
                 "--asm-define PET=1",
-                "--asm-define C64=0",
                 "--asm-include-dir=include",
                 "-o petrock.prg",
-                "--cpu 65c02",
                 "-t none",
                 "${file}"
             ],
@@ -32,7 +30,7 @@
         {
             "label": "Build for C64",
             "type": "shell",
-            "command": "cl65 --verbose  --asm-include-dir include --asm-define PET=0 --asm-define C64=1 -o c64rock.prg --cpu 65c02 -t none ${file}",
+            "command": "cl65 --verbose  --asm-include-dir include --asm-define C64=1 -o c64rock.prg -t none ${file}",
             "args": [],
             "group": {
                 "kind": "build",
