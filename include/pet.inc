@@ -8,6 +8,12 @@
     SCRATCH_END   = $03F9   ; End of cassette buffer  
 	SCREEN_MEM    = $8000
 
+	JIFFY_TIMER	  = $008F	; LSB of jiffy timer
+
+	zptmp  		  = $BD
+	zptmpB 		  = $00
+	zptmpC 		  = $1F
+
 ; --------- zero page -------------------------------------------------------
 
 	LINNUM		= $11	; $11=lsb, $12=msb result from RDINT

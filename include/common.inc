@@ -6,6 +6,7 @@
 	CLRHOME		= $93 ; clear screen
 	CURDN		= $11 ; cursor down
 
+	ROWS		= 25  ; screen rows
 ;---------- tokens ----------------------------------------------------------
 	TK_MUL		= $ac ; *
 	TK_POW		= $ae ; ^

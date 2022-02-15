@@ -1,13 +1,45 @@
 ;----------------------------------------------------------------------------
 ; Definitions for the C64
 ;----------------------------------------------------------------------------
+
+	JIFFY_TIMER	  = $00A2	; LSB of jiffy timer
+
+    CLRSCR        = $E544   ; Clear screen
+
+    zptmp         = $FB
+    zptmpB        = $FD
+    zptmpC        = $22
+
     COLUMNS       = 40      ; Screen width, either 40 or 80
 
     SCRATCH_START = $033C   ; Second cassette buffer on PET
     SCRATCH_END   = $03FB   ; End of cassette buffer  
 
 	SCREEN_MEM    = $0400   ; Screen buffer of 1000 bytes
+    COLOR_MEM     = $d800   ; Screen color memory of 1000 bytes
     
+    SCREEN_COLOR  = $d021  
+    BORDER_COLOR  = $d020
+
+    ; Screen color codes
+
+    BLACK         = 0
+    WHITE         = 1
+    RED           = 2
+    CYAN          = 3
+    PURPLE        = 4
+    GREEN         = 5
+    BLUE          = 6
+    YELLOW        = 7
+    ORANGE        = 8
+    BROWN         = 9
+    LIGHT_RED     = 10
+    DARK_GREY     = 11
+    MED_GREY      = 12
+    LIGHT_GREEN   = 13
+    LIGHT_BLUE    = 14
+    LIGHT_GREY    = 15
+
 ; Microsoft BASIC 2.0 ROM Functions
 
 ; $A000	Basic cold start vector ($E394)

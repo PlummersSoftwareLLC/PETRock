@@ -1,4 +1,6 @@
 .vscode
 petrock.prg
 c64rock.prg
+*.lst
+*.map
 
