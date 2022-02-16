@@ -3,7 +3,7 @@
 ;-----------------------------------------------------------------------------------
 ; (c) PlummersSoftwareLLC, 02/11/2022 Initial commit
 ;         David Plummer
-;         Rutger Bergen
+;         Rutger van Bergen
 ;-----------------------------------------------------------------------------------
 
 .SETCPU "6502"
@@ -118,7 +118,7 @@ start:          cld
                 
 .if PET	
                 lda #12                         ; Switch to uppercas/PETSCII
-                sta 59468
+                sta 59468                       ;  w/ classic POKE 59468,12
 .endif
                 jsr InitVariables               ; Since we can be in ROM, zero stuff out
                 jsr ClearScreen         
@@ -150,7 +150,7 @@ start:          cld
 
 drawLoop:	  
               .if C64                           ; Wait for V-Blank
-:       				bit $D011
+:       				bit SCREEN_CONTROL
                 bpl :-
               .endif				
                 
@@ -175,10 +175,12 @@ drawLoop:
                 sta Peaks
 
 
-              .if TIMING
+              .if C64 && TIMING
                 lda #BLACK
                 sta BORDER_COLOR			
-:			        	bit $D011
+              .endif
+              .if C64                
+:			        	bit SCREEN_CONTROL
                 bmi :-
               .endif
 
@@ -373,8 +375,8 @@ DrawSquare:		  ldx	SquareX
                 bmi :+
                 iny
                 jsr	DrawVLine
-                dey
-:                
+               ; dey                            ; Normally post-dec Y to fix it up, but not needed here
+:                                               ;   because Y is loaded explicitly below anyway
                 lda	SquareX
                 clc
                 adc	Width
@@ -410,7 +412,7 @@ bottomline:
                 sbc #2				   		            ; Account for first and las chars 
                 inx							                ; Start one over past stat char
                 jsr	DrawHLine
-                dex						            	    ; Put X back where it was
+              ; dex						             	    ; Put X back where it was if you need to preserve X
 
                 lda SquareX
                 clc
@@ -495,6 +497,7 @@ DrawHLine:		  sta tempDrawLine					        ; Start at the X/Y pos in screen mem
                 sty zptmp+1
                 lda lineChar				            ; Store the line char in screen mem
                 ldy tempDrawLine
+                dey
 :				        sta (zptmp), y
                 dey
                 bpl :-

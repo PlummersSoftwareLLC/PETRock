@@ -1,6 +1,5 @@
 .vscode
-petrock.prg
-c64rock.prg
+*.prg
 *.lst
 *.map
 
