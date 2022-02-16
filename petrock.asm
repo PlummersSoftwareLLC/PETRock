@@ -33,6 +33,18 @@ HLINE2SYMBOL		  = 100                         ; Horizontal line bottom side
 
 ; System Locations ------------------------------------------------------------------
 
+.ifndef C64
+    C64         = 0
+.endif
+
+.ifndef PET
+    PET         = 0
+.endif
+
+.if (.not (PET .xor C64))
+    .fatal "Define exactly one of PET or C64 to equal 1."
+.endif
+
 .INCLUDE "common.inc"
 
 .if COLUMNS = 40
@@ -189,6 +201,7 @@ drawLoop:
                 bne drawLoop
 
                 ldy #>exitstr                   ; Output exiting text and exit
+
                 lda #<exitstr
                 jsr WriteLine
 
@@ -321,8 +334,8 @@ addrloop:		    lda lineChar
                 tax
                 pla						            	    ; Restore Y
                 tay
-
                 rts
+
 
 ;-----------------------------------------------------------------------------------
 ; DrawSquare
@@ -442,11 +455,11 @@ donesquare:		  rts
 ;-----------------------------------------------------------------------------------
         
 OutputSymbolXY:	sta	tempOutput
+
                 txa
                 pha
                 tya
                 pha
-
                 jsr	GetCursorAddr				        ; Store the screen code in
                 stx zptmp						            ; screen RAM
                 sty zptmp+1
