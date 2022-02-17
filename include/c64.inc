@@ -20,7 +20,7 @@
     
     SCREEN_COLOR  = $d021  
     BORDER_COLOR  = $d020
-
+    SCREEN_CONTROL= $d011
     ; Screen color codes
 
     BLACK         = 0
