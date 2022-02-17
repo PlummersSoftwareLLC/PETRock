@@ -8,154 +8,11 @@
 
 .SETCPU "6502"
 
-.ifndef C64
-    C64         = 0
-.endif
-.ifndef PET
-    PET         = 0
-.endif
+; Include the system headers and application defintions ----------------------------
 
-.if (.not (PET .xor C64))
-    .fatal "Please define exactly one of PET or C64 to equal 1."
-.endif
+.include "petrock.inc"
 
-; Definitions -----------------------------------------------------------------------
-
-DEBUG               = 1                         ; Enable code that only is included for debug builds
-EPROM               = 0                         ; When TRUE, no BASIC stub, no load address in file
-TIMING              = 0                         ; Change border color to show drawing progress
-
-.if C64
-    __C64__      = 1
-    .if EPROM
-        BASE    = $8000     ; Open C64 ROM space (not re)
-    .else
-        BASE    = $0801     ; C64 Start of BASIC
-    .endif
-
-    zptmp         = $FB
-    zptmpB        = $FD
-    zptmpC        = $22
-
-
-    SCRATCH_START = $033C   ; Second cassette buffer on PET
-    SCRATCH_END   = $03FB   ; End of cassette buffer  
-  	SCREEN_MEM    = $0400   ; Screen buffer of 1000 bytes
-
-    SCREEN_COLOR   = VIC_BG_COLOR0
-    BORDER_COLOR   = VIC_BORDERCOLOR 
-    SCREEN_CONTROL = VIC_CTRL1
-
-    COLOR_MEM     = $d800   ; Screen color memory of 1000 bytes
-
-
-    ; Screen color codes
-
-    BLACK         = 0
-    WHITE         = 1
-    RED           = 2
-    CYAN          = 3
-    PURPLE        = 4
-    GREEN         = 5
-    BLUE          = 6
-    YELLOW        = 7
-    ORANGE        = 8
-    BROWN         = 9
-    LIGHT_RED     = 10
-    DARK_GREY     = 11
-    MED_GREY      = 12
-    LIGHT_GREEN   = 13
-    LIGHT_BLUE    = 14
-    LIGHT_GREY    = 15
-.endif
-
-.if PET
-
-    __CBM510__   = 1        ; If building for the PET we'll assume 80 column machine
-    .if EPROM
-        BASE    = $B000     ; Open PET ROM space
-    .else
-        BASE    = $0401     ; PET Start of BASIC
-    .endif
-
-    zptmp  		  = $BD
-    zptmpB 		  = $00
-    zptmpC 		  = $1F
-    
-    SCRATCH_START = $033A   ; Second cassette buffer on PET
-    SCRATCH_END   = $03F9   ; End of cassette buffer  
-	  SCREEN_MEM    = $8000
-
-.endif
-
-; Includes --------------------------------------------------------------------------
-
-        .include        "cbm_kernal.inc"
-        .include        "ser-kernel.inc"
-        .include        "ser-error.inc"
-        .include        "c64.inc"
-
-; System Definition -----------------------------------------------------------------
-
-MINUTE_JIFFIES      = 3600              ; Number of jiffies in a minute
-SECOND_JIFFIES      = 60                ; Number of jiffies in a second
-
-CLRHOME		          = $93               ; Clear screen
-
-
-; Defines below this line should generally not require changing
-
-NUM_BANDS           = 16                        ; 16 bands in the spectrum data
-
-; Symbol definitions for square drawing - PETSCI for graphics that make a square 
-
-TOPLEFTSYMBOL		  = 79                
-BOTTOMRIGHTSYMBOL	= 122               
-TOPRIGHTSYMBOL		= 80
-BOTTOMLEFTSYMBOL	= 76
-VLINE1SYMBOL		  = 101                         ; Vertical line left side
-VLINE2SYMBOL      = 103                         ; Vertical line right side
-HLINE1SYMBOL		  = 99                          ; Horizontal line top side
-HLINE2SYMBOL		  = 100                         ; Horizontal line bottom side
-
-; System Locations ----------------------------------------------------------
-
-.if XSIZE = 40
-    BAND_WIDTH      = 2
-    LEFT_MARGIN     = 4
-.endif
-.if XSIZE = 80
-    BAND_WIDTH      = 4
-    LEFT_MARGIN     = 8
-.endif
-
-TOP_MARGIN          = 3
-BOTTOM_MARGIN       = 2
-BAND_HEIGHT         = 20
-
-;----------------------------------------------------------------------------
-; Common definitions for all Commodore BASICs
-;----------------------------------------------------------------------------
-	CR			          = $0D ; CARRIAGE RETURN
-	QUOT		          = $22 ; Quote characarter
-	CURDN		          = $11 ; cursor down
-;---------- tokens ----------------------------------------------------------
-	TK_MUL		        = $ac ; *
-	TK_POW		        = $ae ; ^
-	TK_GT		          = $b1 ; >
-	TK_EQU		        = $b2 ; =
-	TK_LT		          = $b3 ; <
-	TK_IF		          = $8b ; IF
-	TK_REM		        = $8f ; REM
-	TK_PRINT	        = $99 ; PRINT
-	TK_SYS		        = $9e ; SYS
-	TK_NEW		        = $a2 ; NEW
-	TK_THEN		        = $a7 ; THEN
-	TK_PEEK		        = $c2 ; PEEK
-
-.assert (TOP_MARGIN + BOTTOM_MARGIN + BAND_HEIGHT <= YSIZE), error
-
-; Our Definitions -------------------------------------------------------------------
+; Our BSS Data  --------------------------------------------------------------------
 
 .org SCRATCH_START
 .bss
@@ -167,6 +24,7 @@ ScratchStart:
     tempFillSquare:	 .res  1                    ; Temp used by FillSquare
     tempDrawLine:    .res  1                    ; Temp used by DrawLine
     tempOutput:      .res  1                    ; Temp used by OutputSymbol
+    tempByteCopy:    .res  1
     lineChar:	       .res  1                    ; Line draw char
     charColor:		   .res  1                    ; Current output color
     SquareX:		     .res  1                    ; Args for DrawSquare
@@ -174,6 +32,12 @@ ScratchStart:
     Width:			     .res  1
     Height:			     .res  1				            ; Height of area to draw
     ClearHeight:	   .res  1				            ; Height of area to clear
+    DataIndex:       .res  1                    ; Index into fakedata for demo
+    MultiplyTemp:	   .res  1                    ; Scratch variable for multiply code
+    resultLo:		     .res  1			              ; Results from multiply operations
+    resultHi:		     .res  1
+    Peaks:           .res  NUM_BANDS            ; Peak Data
+    VU:              .res  1                    ; VU Audio Data
 ScratchEnd:
 
 .assert * <= SCRATCH_END, error                 ; Make sure we haven't run off the end of the buffer
@@ -216,7 +80,7 @@ endOfBasic:     .word 00                        ;   the +7 expression above, as 
 .endif                                              
 
 ;-----------------------------------------------------------------------------------
-; Start of Code
+; Start of Assembly Code
 ;-----------------------------------------------------------------------------------
 
 start:          cld
@@ -264,21 +128,14 @@ drawLoop:
                 sta BORDER_COLOR
               .endif
 
-                lda Peaks+NUM_BANDS-1           ; Wrap data around from end to start
-                pha	
+                jsr FillPeaks
 
-                lda #NUM_BANDS - 1              ; Scroll the others in place
-                tax
-:	        			lda Peaks, x
-                sta Peaks+1, x
-                clc
+                ldx #NUM_BANDS - 1              ; Draw each of the bands in reverse order
+:
+           			lda Peaks, x                    ; Scroll the others in place
                 jsr DrawBand
                 dex
                 bpl :-
-
-                pla
-                sta Peaks
-
 
               .if C64 && TIMING
                 lda #BLACK
@@ -286,7 +143,7 @@ drawLoop:
               .endif
               .if C64                
 :			        	bit SCREEN_CONTROL
-                bmi :-
+                 bmi :-
               .endif
 
                 jsr GETIN				                ; Keyboard Handling
@@ -300,9 +157,54 @@ drawLoop:
 
                 rts
 
-; Dummy data until replaced by live spectrum data
+ScrollBands:    lda Peaks+NUM_BANDS-1           ; Wrap data around from end to start
+                pha
+                lda #NUM_BANDS - 1              ; Draw each of the bands in reverse order
+                tax
+ :         			lda Peaks, x                    ; Scroll the others in place
+                sta Peaks+1, x
+                dex
+                bpl :-
+                pla
+                sta Peaks
 
-Peaks:			.byte 20, 20, 19, 16, 11, 6, 3, 2, 2, 4, 7, 12, 15, 17, 19, 19
+;-----------------------------------------------------------------------------------
+; InitVariables 
+;-----------------------------------------------------------------------------------
+; We use a bunch of storage in the system (on the PET, it's Cassette Buffer #2) and
+; it starts out in an unknown state, so we have code to zero it or set it to defaults
+;-----------------------------------------------------------------------------------
+
+FillPeaks:    tya
+              pha
+              txa
+              pha
+
+              ldx DataIndex         ; Multiply the row number by 16 to get the offset
+              ldy #16               ; into the data table
+              jsr Multiply
+
+              lda resultLo          ; Now add the offset and the table base together
+              clc                   ;  and store the resultant ptr in zptmpC
+              adc #<AudioData
+              sta zptmpB
+              lda resultHi
+              adc #>AudioData
+              sta zptmpB+1
+
+              ldy #15               ; Copy the 16 bytes at the ptr address to the
+:             lda (zptmpB), y       ;   PeakData table
+              sta Peaks, y
+              dey
+              bpl :-
+
+              inc DataIndex           ; Inc DataIndex - Assumes wrap!
+
+              pla
+              tax
+              pla
+              tay
+              rts
 
 ;-----------------------------------------------------------------------------------
 ; InitVariables 
@@ -381,6 +283,32 @@ WriteLine:      sta zptmp
                 iny
                 bne @loop
 done:           rts
+
+
+;-----------------------------------------------------------------------------------
+; Multiply		Multiplies X * Y == ResultLo/ResultHi
+;-----------------------------------------------------------------------------------
+;				X		8 bit value in
+;				Y		8 bit value in
+;
+; Apparent credit to Leif Stensson for this approach!
+;-----------------------------------------------------------------------------------
+
+Multiply:
+                stx resultLo      
+                sty resultHi
+                lda  #0
+                ldx  #8
+                lsr  resultLo
+mloop:          bcc  no_add
+                clc
+                adc  resultHi
+no_add:         ror
+                ror  resultLo
+                dex
+                bne  mloop
+                sta  resultHi
+                rts
 
 ;-----------------------------------------------------------------------------------
 ; FillSquare
