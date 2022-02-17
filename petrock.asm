@@ -26,7 +26,7 @@ ScratchStart:
     tempOutput:      .res  1                    ; Temp used by OutputSymbol
     tempByteCopy:    .res  1
     lineChar:	       .res  1                    ; Line draw char
-    charColor:		   .res  1                    ; Current output color
+    charColor:       .res  1                    ; Current output color
     SquareX:		     .res  1                    ; Args for DrawSquare
     SquareY:		     .res  1
     Width:			     .res  1
@@ -84,7 +84,6 @@ endOfBasic:     .word 00                        ;   the +7 expression above, as 
 ;-----------------------------------------------------------------------------------
 
 start:          cld
-                
 .if PET	
                 lda #12                         ; Switch to uppercas/PETSCII
                 sta 59468                       ;  w/ classic POKE 59468,12
@@ -130,6 +129,21 @@ drawLoop:
 
                 jsr FillPeaks
 
+                ldx #1                          ; Print "Current Frame" banner
+                ldy #09
+                clc
+                jsr PLOT
+                ldy #>framestr                   
+                lda #<framestr
+                jsr WriteLine
+ 
+                ldx DataIndex
+                lda #0
+                jsr BASIC_INTOUT
+                lda #' '
+                jsr CHROUT
+                jsr CHROUT
+
                 ldx #NUM_BANDS - 1              ; Draw each of the bands in reverse order
 :
            			lda Peaks, x                    ; Scroll the others in place
@@ -151,7 +165,6 @@ drawLoop:
                 bne drawLoop
 
                 ldy #>exitstr                   ; Output exiting text and exit
-
                 lda #<exitstr
                 jsr WriteLine
 
@@ -609,6 +622,7 @@ drawbar:
 
 startstr:       .literal "STARTING...", 13, 0
 exitstr:        .literal "EXITING...", 13, 0
+framestr:       .literal "  CURRENT FRAME: ", 0
 clrwhite:		    .literal $99, $93, 0
 
 .include "fakedata.inc"

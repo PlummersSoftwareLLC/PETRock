@@ -25,6 +25,9 @@ TIMING              = 0     ; Change border color to show drawing progress
 
 .if C64
     __C64__      = 1
+
+    .include "basic_c64.inc"
+
     .if EPROM
         BASE    = $8000     ; Open C64 ROM space (not re)
     .else
