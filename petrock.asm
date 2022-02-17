@@ -590,3 +590,4 @@ startstr:       .literal "STARTING...", 13, 0
 exitstr:        .literal "EXITING...", 13, 0
 clrwhite:		    .literal $99, $93, 0
 
+.include "fakedata.inc"
