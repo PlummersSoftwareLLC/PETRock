@@ -23,7 +23,7 @@
         {
             "label": "Build for C64",
             "type": "shell",
-            "command": "cl65 --verbose  --asm-include-dir include -debug --debug-info --listing c64rock.lst --mapfile c64rock.map  --asm-define C64=1 -o c64rock.prg -t none ${file}",
+            "command": "cl65 --verbose -debug --debug-info --listing c64rock.lst --mapfile c64rock.map  --asm-define C64=1 -o c64rock.prg -t none ${file}",
             "args": [],
             "group": {
                 "kind": "build",
@@ -37,7 +37,7 @@
         {
             "label": "Run on PET",
             "type": "shell",
-            "command": "cl65 --verbose  --asm-include-dir include -debug --debug-info --listing petrock.lst --mapfile petrock.map --asm-define PET=1  -o petrock.prg -t none ${file} && xpet -model 8032 petrock.prg ",
+            "command": "xpet -model 4032 petrock.prg ",
             "args": [],
             "group": {
                 "kind": "test",
@@ -46,12 +46,15 @@
             "presentation": {
                 "clear": true
             },
-            "problemMatcher": "$msCompile"
+            "problemMatcher": "$msCompile",
+            "dependsOn": [
+                "Build for PET"
+            ]            
         },
         {
             "label": "Run on C64",
             "type": "shell",
-            "command": "cl65 --verbose  --asm-include-dir include -debug --debug-info --listing c64rock.lst --mapfile c64rock.map --asm-define C64=1 -o c64rock.prg -t none ${file} && x64sc c64rock.prg ",
+            "command": "x64sc c64rock.prg ",
             "args": [],
             "group": {
                 "kind": "test",
@@ -60,7 +63,10 @@
             "presentation": {
                 "clear": true
             },
-            "problemMatcher": "$msCompile"
+            "problemMatcher": "$msCompile",
+            "dependsOn": [
+                "Build for C64"
+            ]
         }
 
     ]
