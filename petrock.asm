@@ -129,6 +129,7 @@ drawLoop:
 
                 jsr FillPeaks
 
+              .if C64
                 ldx #1                          ; Print "Current Frame" banner
                 ldy #09
                 clc
@@ -136,14 +137,15 @@ drawLoop:
                 ldy #>framestr                   
                 lda #<framestr
                 jsr WriteLine
- 
+
                 ldx DataIndex
                 lda #0
                 jsr BASIC_INTOUT
                 lda #' '
                 jsr CHROUT
                 jsr CHROUT
-
+              .endif
+              
                 ldx #NUM_BANDS - 1              ; Draw each of the bands in reverse order
 :
            			lda Peaks, x                    ; Scroll the others in place
