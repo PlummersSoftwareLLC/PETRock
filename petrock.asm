@@ -675,7 +675,7 @@ drawbar:
 ;				X		Cursor Y Pos
 ;				Y   Cursor X Pos
 ;       (NOTE Reversed)
-   -----------------------------------------------------------------------------------
+;-----------------------------------------------------------------------------------
 PlotEx:
         bcs     :+
         jsr     PLOT            ; Set cursor position using original ROM PLOT
