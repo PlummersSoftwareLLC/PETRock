@@ -95,7 +95,7 @@ start:          cld
 
                 jsr EmptyBorder
 drawLoop:	  
-:       				bit SCREEN_CONTROL
+:       				bit SCREEN_CONTROL              ; Wait for a known point in the raster
                 bpl :-
                 
               .if TIMING
@@ -575,6 +575,7 @@ OutputSymbolXY:	sta	tempOutput
                 sta (zptmp),y
                 ldx tempX
                 ldy tempY
+
                 rts
 
 ;-----------------------------------------------------------------------------------
@@ -584,13 +585,18 @@ OutputSymbolXY:	sta	tempOutput
 ;				Y		Y Coord of Start [PRESERVED]
 ;				A		Length of line
 ;-----------------------------------------------------------------------------------
+; BUGBUG (Optimization, Davepl) - This code draws color RAM edvery time a line is
+; drawn, which would allow for different colors every time, which might be cool, but
+; if that ability is never used then the color memory only really need to be 
+; written once (or each time the screen is cleared, etc).
+;-----------------------------------------------------------------------------------
 
-DrawHLine:		  sta tempDrawLine					        ; Start at the X/Y pos in screen mem
+DrawHLine:		  sta tempDrawLine					          ; Start at the X/Y pos in screen mem
                 cmp #1
                 bpl :+
                 rts
 :
-                tya
+                tya                                 ; Save X, Y
                 pha
                 txa
                 pha
@@ -598,14 +604,26 @@ DrawHLine:		  sta tempDrawLine					        ; Start at the X/Y pos in screen mem
                 jsr GetCursorAddr
                 stx zptmp
                 sty zptmp+1
-                lda lineChar				            ; Store the line char in screen mem
-                ldy tempDrawLine
+                
+                txa                              ; Add the distance to color memory to
+                clc                              ; the zptmp pointer and store it in
+                adc #<(COLOR_MEM - SCREEN_MEM)   ; zptmpB so that it in turn points at
+                sta zptmpB                       ; the right place in color ram
+                tya
+                clc
+                adc #>(COLOR_MEM - SCREEN_MEM)
+                sta zptmpB+1
+
+                ldy tempDrawLine                 ; Draw the line
                 dey
-:				        sta (zptmp), y
-                dey
+:				        lda lineChar                     ; Store the line character in screen ram
+                sta (zptmp), y
+                lda TEXT_COLOR                   ; Store current color in color ram
+                sta (zptmpB), y
+                dey                              ; Rinse and repeat
                 bpl :-
 
-                pla
+                pla                              ; Restore X, Y
                 tax
                 pla
                 tay
@@ -616,21 +634,46 @@ DrawVLine:		  sta tempDrawLine			            ; Start at the X/Y pos in screen me
                 bpl :+
                 rts
 :
-                jsr GetCursorAddr
-                stx zptmp
+                jsr GetCursorAddr                 ; Get the screen memory addr of the
+                stx zptmp                         ;   line's X/Y start position
                 sty zptmp+1
-vloop:			    lda lineChar				                ; Store the line char in screen mem
+
+                txa                               ; Take the screen memory pointer and add
+                clc                               ;   the distance to color memory to it, 
+                adc #<(COLOR_MEM - SCREEN_MEM)    ;   so zptmpB points at the right area of
+                sta zptmpB                        ;   color memory.
+                tya
+                clc
+                adc #>(COLOR_MEM - SCREEN_MEM)
+                sta zptmpB+1
+
+vloop:			    lda lineChar				              ; Store the line char in screen mem
+
                 ldy #0
                 sta (zptmp), y
-                lda zptmp					              ; Now add 40/80 to the lsb of ptr
+
+                lda zptmp                         ; Add the offset to color memory
+                clc                               ;  to the character pointer and
+                adc #<(COLOR_MEM - SCREEN_MEM)    ;  then store the current color
+                sta zptmpB                        ;  in color memory where it goes
+                lda zptmp+1
+                adc #>(COLOR_MEM - SCREEN_MEM)
+                sta zptmpB+1
+                lda TEXT_COLOR
+                sta (zptmpB), y
+
+                lda zptmp					                ; Now add 40/80 to the lsb of ptr
                 clc
                 adc #XSIZE
                 sta zptmp
                 bcc :+						
-                inc zptmp+1				            	; On overflow in the msb as well
-:				        dec tempDrawLine			                  ; One less line to go
+                inc zptmp+1				            	  ; On overflow in the msb as well
+:
+
+				        dec tempDrawLine			            ; One less line to go
                 bpl vloop					
                 rts
+
 ;-----------------------------------------------------------------------------------
 ; DrawBand		Draws a single band of the spectrum analyzer
 ;-----------------------------------------------------------------------------------
@@ -638,7 +681,14 @@ vloop:			    lda lineChar				                ; Store the line char in screen mem
 ;				A		Height of bar
 ;-----------------------------------------------------------------------------------
 
+BandColors:     .byte RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE,  RED
+                .byte ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, RED, ORANGE
+
 DrawBand:		    sta Height
+
+                lda BandColors, x               ; Draw this band in the color specified for this bar
+                sta TEXT_COLOR
+
                 txa					                    ; X pos will be column number times BAND_WIDTH plus margin
                 pha
                 asl						                  ; Multiplty column number by 2 or 4
