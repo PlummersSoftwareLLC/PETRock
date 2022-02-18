@@ -1,5 +1,5 @@
 ;-----------------------------------------------------------------------------------
-; Spectrum Analyzer Display for C64 and CBM/PET 6502
+; Spectrum Analyzer Display for C64
 ;-----------------------------------------------------------------------------------
 ; (c) PlummersSoftwareLLC, 02/11/2022 Initial commit
 ;         David Plummer
@@ -8,54 +8,49 @@
 
 ; Definitions -----------------------------------------------------------------------
 
-DEBUG               = 1     ; Enable code that only is included for debug builds
-EPROM               = 0     ; When TRUE, no BASIC stub, no load address in file
-TIMING              = 0     ; Change border color to show drawing progress
-WAIT_FOR_RASTER     = 0     ; Align drawing to screen raster
+DEBUG             = 1       ; Enable code that only is included for debug builds
+TIMING            = 0       ; Change border color to show drawing progress
+WAIT_FOR_RASTER   = 0       ; Align drawing to screen raster
 
-    .include "basic_c64.inc"
+.include "basic_c64.inc"
 
-    .if EPROM
-        BASE    = $8000     ; Open C64 ROM space (not re)
-    .else
-        BASE    = $0801     ; C64 Start of BASIC
-    .endif
-
-    zptmp         = $FB
-    zptmpB        = $FD
-    zptmpC        = $22
+BASE              = $0801     ; C64 Start of BASIC
         
-    TEXT_COLOR    = $0286   ; Current output color
-    SCRATCH_START = $033C   ; Second cassette buffer on PET
-    SCRATCH_END   = $03FB   ; End of cassette buffer  
-  	SCREEN_MEM    = $0400   ; Screen buffer of 1000 bytes
+zptmp             = $FB
+zptmpB            = $FD
+zptmpC            = $22
+            
+TEXT_COLOR        = $0286   ; Current output color
+SCRATCH_START     = $033C   ; Second cassette buffer on PET
+SCRATCH_END       = $03FB   ; End of cassette buffer  
+SCREEN_MEM        = $0400   ; Screen buffer of 1000 bytes
 
-    SCREEN_COLOR   = VIC_BG_COLOR0
-    BORDER_COLOR   = VIC_BORDERCOLOR 
-    
-    RASTHI         = $D011  ; Hiword of screen raster   
-    RASTLO         = $D012  ; Loword of screen raster
+SCREEN_COLOR      = VIC_BG_COLOR0
+BORDER_COLOR      = VIC_BORDERCOLOR 
 
-    COLOR_MEM     = $d800   ; Screen color memory of 1000 bytes
+RASTHI            = $D011  ; Hiword of screen raster   
+RASTLO            = $D012  ; Loword of screen raster
 
-    ; Screen color codes
+COLOR_MEM         = $d800   ; Screen color memory of 1000 bytes
 
-    BLACK         = 0
-    WHITE         = 1
-    RED           = 2
-    CYAN          = 3
-    PURPLE        = 4
-    GREEN         = 5
-    BLUE          = 6
-    YELLOW        = 7
-    ORANGE        = 8
-    BROWN         = 9
-    LIGHT_RED     = 10
-    DARK_GREY     = 11
-    MED_GREY      = 12
-    LIGHT_GREEN   = 13
-    LIGHT_BLUE    = 14
-    LIGHT_GREY    = 15
+; Screen color codes
+
+BLACK             = 0
+WHITE             = 1
+RED               = 2
+CYAN              = 3
+PURPLE            = 4
+GREEN             = 5
+BLUE              = 6
+YELLOW            = 7
+ORANGE            = 8
+BROWN             = 9
+LIGHT_RED         = 10
+DARK_GREY         = 11
+MED_GREY          = 12
+LIGHT_GREEN       = 13
+LIGHT_BLUE        = 14
+LIGHT_GREY        = 15
 
 ; Includes --------------------------------------------------------------------------
 
@@ -75,6 +70,8 @@ CLRHOME		        = $93               ; Clear screen
 
 NUM_BANDS           = 16                ; 16 bands in the spectrum data
 MAX_VU              = 17                ; Maximum size per side of the VU meter
+FRAMESPERSHIFT      = 0                 ; We scroll color every this many frames
+                                        ;  or not at all if set to zero
 
 ; Center the VU meter on the second screen line
 

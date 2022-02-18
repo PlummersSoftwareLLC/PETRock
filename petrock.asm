@@ -1,5 +1,5 @@
 ;-----------------------------------------------------------------------------------
-; Spectrum Analyzer Display for C64 and CBM/PET 6502
+; Spectrum Analyzer Display for C64 
 ;-----------------------------------------------------------------------------------
 ; (c) PlummersSoftwareLLC, 02/11/2022 Initial commit
 ;         David Plummer
@@ -39,6 +39,7 @@ ScratchStart:
     MultiplyTemp:	   .res  1                    ; Scratch variable for multiply code
     resultLo:		     .res  1			              ; Results from multiply operations
     resultHi:		     .res  1
+    shiftCountdown:  .res  1                    ; We scroll color every N frames
     VU:              .res  1                    ; VU Audio Data
     Peaks:           .res  NUM_BANDS            ; Peak Data for current frame    
 ScratchEnd:
@@ -52,7 +53,6 @@ ScratchEnd:
 ; BASIC program to load and execute ourselves.  Simple lines of tokenized BASIC that
 ; have a banner comment and then a SYS command to start the machine language code.
 
-.if !EPROM
                 .org 0000
                 .word BASE
                 .org  BASE
@@ -78,9 +78,6 @@ Line20:         .word endOfBasic                ; PTR to next line, which is 000
 
                 .byte 00                        ; Do not modify without understanding 
 endOfBasic:     .word 00                        ;   the +7 expression above, as this is
-.else                                           ;   exactly 7 bytes and must match it
-    .org BASE
-.endif                                              
 
 ;-----------------------------------------------------------------------------------
 ; Start of Assembly Code
@@ -146,7 +143,19 @@ drawLoop:
 :			        	bit RASTHI                      
                 bmi :-
               .endif
-              
+                
+                ; Check to see its time to scroll the color
+
+              .if FRAMESPERSHIFT > 0
+                inc shiftCountdown              ; Every N frames we scroll the color bars
+                lda shiftCountdown
+                cmp #FRAMESPERSHIFT
+                bcc :+
+                lda #0
+                sta shiftCountdown
+                jsr ScrollColors
+:             .endif
+
                 jsr GETIN				                ; Keyboard Handling
                 cmp #$03
                 bne drawLoop
@@ -595,7 +604,7 @@ OutputSymbolXY:	sta	tempOutput
 ; written once (or each time the screen is cleared, etc).
 ;-----------------------------------------------------------------------------------
 
-DrawHLine:		  sta tempDrawLine					          ; Start at the X/Y pos in screen mem
+DrawHLine:		  sta tempDrawLine					         ; Start at the X/Y pos in screen mem
                 cmp #1
                 bpl :+
                 rts
@@ -630,8 +639,7 @@ DrawHLine:		  sta tempDrawLine					          ; Start at the X/Y pos in screen me
 				        lda TEXT_COLOR                   ; Store current color in color ram
 :               sta (zptmpB), y
                 dey                              ; Rinse and repeat
-                bpl :-
-
+                bne :-
 
                 pla                              ; Restore X, Y
                 tax
@@ -671,7 +679,7 @@ vloop:			    lda lineChar				              ; Store the line char in screen mem
 :
                 lda TEXT_COLOR
                 sta (zptmpB), y
-                
+
                 lda zptmp					                ; Now add 40/80 to the lsb of ptr
                 clc
                 adc #XSIZE
@@ -682,7 +690,7 @@ vloop:			    lda lineChar				              ; Store the line char in screen mem
 :
 
 				        dec tempDrawLine			            ; One less line to go
-                bpl vloop					
+                bne vloop					
                 rts
 
 ;-----------------------------------------------------------------------------------
@@ -694,6 +702,7 @@ vloop:			    lda lineChar				              ; Store the line char in screen mem
 
 BandColors:     .byte RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE,  RED
                 .byte ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, RED, ORANGE
+                BandColorSize = * - BandColors
 
 DrawBand:		    sta Height
 
@@ -720,7 +729,7 @@ DrawBand:		    sta Height
                 lda #' '				                ; Clear the top, empty portion of the bar
                 sta lineChar			
                 jsr FillSquare
-drawbar:
+
                 lda #(BAND_HEIGHT + TOP_MARGIN)
                 sec                             ; doesn't work on bands > 2 wide, where they have stuff
                 sbc Height                      ; in the middle that might need to be erased
@@ -729,6 +738,27 @@ drawbar:
                 pla
                 tax
                 rts
+
+;-----------------------------------------------------------------------------------
+; ScrollColors
+;-----------------------------------------------------------------------------------
+; Circular buffer copy of the color table
+;-----------------------------------------------------------------------------------
+
+ScrollColors:   lda BandColors+BandColorSize-1  ; Save a copy of the last table entry
+                pha
+
+                ldx #BandColorSize-2            ; Shift all the elements forward
+:               lda BandColors, x
+                sta BandColors+1, x
+                dex
+                bpl :-
+                
+                pla                             ; Put the old last as the new first
+                sta BandColors
+
+                rts
+
 
 ;-----------------------------------------------------------------------------------
 ; PlotEx		Replacement for KERNAL plot that fixes color ram update bug
