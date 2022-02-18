@@ -669,6 +669,8 @@ vloop:			    lda lineChar				              ; Store the line char in screen mem
 
                 ldy #0
                 sta (zptmp), y
+                lda TEXT_COLOR
+                sta (zptmpB), y
 
                 lda zptmpB
                 clc
@@ -677,8 +679,6 @@ vloop:			    lda lineChar				              ; Store the line char in screen mem
                 bcc :+
                 inc zptmpB+1
 :
-                lda TEXT_COLOR
-                sta (zptmpB), y
 
                 lda zptmp					                ; Now add 40/80 to the lsb of ptr
                 clc
