@@ -19,8 +19,7 @@ __C64__ = 1
 .org SCRATCH_START
 .bss
 
-; These are loca BSS variables - they are here in the cassette buffer so that we can
-; be burned into ROM (if we just used .byte we couldn't write values back)
+; These are loca BSS variables.  We're using the cassette buffer for storage.
 
 ScratchStart:    
     tempFillSquare:	 .res  1                    ; Temp used by FillSquare
@@ -93,8 +92,8 @@ start:          cld
                 jsr EmptyBorder
 drawLoop:	  
               .if WAIT_FOR_RASTER
-;:       				bit RASTHI              ; Wait for a known point in the raster
-                bpl :-
+:       				bit RASTHI                      ; Wait for the high byte in the raster counter
+                bpl :-                          ; to become non-zero, indicating scan line 256+
               .endif                
 
               .if TIMING
@@ -140,8 +139,8 @@ drawLoop:
               .endif
 
               .if WAIT_FOR_RASTER
-:			        	bit RASTHI                      
-                bmi :-
+:			        	bit RASTHI                      ; Wait for the bit byte of the raster counter                      
+                bmi :-                          
               .endif
                 
                 ; Check to see its time to scroll the color

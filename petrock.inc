@@ -10,7 +10,8 @@
 
 DEBUG             = 1       ; Enable code that only is included for debug builds
 TIMING            = 0       ; Change border color to show drawing progress
-WAIT_FOR_RASTER   = 0       ; Align drawing to screen raster
+WAIT_FOR_RASTER   = 0       ; Align drawing to screen raster, but since we take longer
+                            ; to render than a single frame draw, not much point yet
 
 .include "basic_c64.inc"
 
