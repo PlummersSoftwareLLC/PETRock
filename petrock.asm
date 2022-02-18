@@ -10,6 +10,8 @@
 
 ; Include the system headers and application defintions ----------------------------
 
+__C64__ = 1
+
 .include "petrock.inc"
 
 ; Our BSS Data  --------------------------------------------------------------------
@@ -25,8 +27,9 @@ ScratchStart:
     tempDrawLine:    .res  1                    ; Temp used by DrawLine
     tempOutput:      .res  1                    ; Temp used by OutputSymbol
     tempByteCopy:    .res  1
+    tempX:           .res  1                    ; Preserve X Pos
+    tempY:           .res  1                    ; Preserve Y Pos
     lineChar:	       .res  1                    ; Line draw char
-    charColor:       .res  1                    ; Current output color
     SquareX:		     .res  1                    ; Args for DrawSquare
     SquareY:		     .res  1
     Width:			     .res  1
@@ -36,8 +39,8 @@ ScratchStart:
     MultiplyTemp:	   .res  1                    ; Scratch variable for multiply code
     resultLo:		     .res  1			              ; Results from multiply operations
     resultHi:		     .res  1
-    Peaks:           .res  NUM_BANDS            ; Peak Data
     VU:              .res  1                    ; VU Audio Data
+    Peaks:           .res  NUM_BANDS            ; Peak Data for current frame    
 ScratchEnd:
 
 .assert * <= SCRATCH_END, error                 ; Make sure we haven't run off the end of the buffer
@@ -84,43 +87,16 @@ endOfBasic:     .word 00                        ;   the +7 expression above, as 
 ;-----------------------------------------------------------------------------------
 
 start:          cld
-.if PET	
-                lda #12                         ; Switch to uppercas/PETSCII
-                sta 59468                       ;  w/ classic POKE 59468,12
-.endif
                 jsr InitVariables               ; Since we can be in ROM, zero stuff out
-                jsr ClearScreen         
 
-              .if C64
                 lda #BLACK
                 sta SCREEN_COLOR
                 sta BORDER_COLOR
-                lda #LIGHT_GREEN
-                sta charColor
 
-                ldy #>clrwhite                  ; Set cursor to white and clear screen
-                lda #<clrwhite
-                jsr WriteLine
-              .endif
-
-                lda #0
-                sta SquareX
-                sta SquareY
-                lda #XSIZE
-                sta Width
-                lda #YSIZE
-                sta Height
-                jsr DrawSquare
-
-;                ldy #>startstr                 ; Output exiting text and exit
-;                lda #<startstr
-;                jsr WriteLine
-
+                jsr EmptyBorder
 drawLoop:	  
-              .if C64                           ; Wait for V-Blank
 :       				bit SCREEN_CONTROL
                 bpl :-
-              .endif				
                 
               .if TIMING
                 lda #DARK_GREY
@@ -129,11 +105,13 @@ drawLoop:
 
                 jsr FillPeaks
 
-              .if C64
-                ldx #1                          ; Print "Current Frame" banner
+                lda #LIGHT_BLUE
+                sta TEXT_COLOR
+
+                ldx #24                          ; Print "Current Frame" banner
                 ldy #09
                 clc
-                jsr PLOT
+                jsr PlotEx
                 ldy #>framestr                   
                 lda #<framestr
                 jsr WriteLine
@@ -144,8 +122,12 @@ drawLoop:
                 lda #' '
                 jsr CHROUT
                 jsr CHROUT
-              .endif
               
+                lda #LIGHT_GREEN
+                sta TEXT_COLOR
+
+                jsr DrawVU                      ; Draw the VU bar at the top of the screen
+
                 ldx #NUM_BANDS - 1              ; Draw each of the bands in reverse order
 :
            			lda Peaks, x                    ; Scroll the others in place
@@ -153,14 +135,13 @@ drawLoop:
                 dex
                 bpl :-
 
-              .if C64 && TIMING
+              .if TIMING
                 lda #BLACK
                 sta BORDER_COLOR			
               .endif
-              .if C64                
+
 :			        	bit SCREEN_CONTROL
-                 bmi :-
-              .endif
+                bmi :-
 
                 jsr GETIN				                ; Keyboard Handling
                 cmp #$03
@@ -170,6 +151,20 @@ drawLoop:
                 lda #<exitstr
                 jsr WriteLine
 
+                rts
+
+EmptyBorder:    ldy #>clrwhite                  ; Set cursor to white and clear screen
+                lda #<clrwhite
+                jsr WriteLine
+                lda #0
+                sta SquareX
+                sta SquareY
+                lda #XSIZE
+                sta Width
+                lda #YSIZE
+                sta Height
+                jsr DrawSquare
+                jsr InitVU                      ; Let the VU meter paint its color mem, etc
                 rts
 
 ScrollBands:    lda Peaks+NUM_BANDS-1           ; Wrap data around from end to start
@@ -184,10 +179,10 @@ ScrollBands:    lda Peaks+NUM_BANDS-1           ; Wrap data around from end to s
                 sta Peaks
 
 ;-----------------------------------------------------------------------------------
-; InitVariables 
+; FillPeaks 
 ;-----------------------------------------------------------------------------------
-; We use a bunch of storage in the system (on the PET, it's Cassette Buffer #2) and
-; it starts out in an unknown state, so we have code to zero it or set it to defaults
+; Copy data from the current index of the fake data table to the current peak data 
+; and vu value
 ;-----------------------------------------------------------------------------------
 
 FillPeaks:    tya
@@ -213,7 +208,17 @@ FillPeaks:    tya
               dey
               bpl :-
 
-              inc DataIndex           ; Inc DataIndex - Assumes wrap!
+              lda #<PeakData        ; Copy the single VU byte from the PeakData
+              sta zptmpB            ;  table into the VU variable
+              lda #>PeakData
+              sta zptmpB+1
+              ldy DataIndex
+              lda (zptmpB), y
+              sta VU
+
+              inc DataIndex           ; Inc DataIndex - Assumes wrap, so if you
+                                      ;   have exacly 256 bytes, you'd need to
+                                      ;   check and fix that here
 
               pla
               tax
@@ -261,6 +266,7 @@ ScreenLineAddresses:
                 .word SCREEN_MEM + 20 * XSIZE, SCREEN_MEM + 21 * XSIZE
                 .word SCREEN_MEM + 22 * XSIZE, SCREEN_MEM + 23 * XSIZE
                 .word SCREEN_MEM + 24 * XSIZE
+                .assert( (* - ScreenLineAddresses) = YSIZE * 2), error
 
 GetCursorAddr:  tya
                 asl
@@ -299,6 +305,63 @@ WriteLine:      sta zptmp
                 bne @loop
 done:           rts
 
+;-----------------------------------------------------------------------------------
+; DrawVU        Draw the current VU meter at the top of the screen
+;-----------------------------------------------------------------------------------
+                
+                ; Color memory bytes that will back the VU meter, and only need to be set once
+VUColorTable:   .byte RED, RED, RED, YELLOW, YELLOW, YELLOW, YELLOW, YELLOW
+                .byte GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN
+                .byte BLACK, BLACK
+                .byte GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN
+                .byte YELLOW, YELLOW, YELLOW, YELLOW, YELLOW, RED, RED, RED
+                VUColorTableLen = * - VUColorTable
+                .assert(VUColorTableLen >= MAX_VU * 2 + 2), error   ; VU plus two spaces in the middle
+
+                ; Copy the color memory table for the VU meter to the right place in color RAM
+
+InitVU:         ldy #VUColorTableLen-1
+:               lda VUColorTable, y
+                sta VUCOLORPOS, y
+                dey 
+                bpl :-
+
+                ; Draw the VU meter on right, then draw its mirror on the left
+
+DrawVU:         lda #<VUPOS1
+                sta zptmp
+                lda #>VUPOS1
+                sta zptmp+1
+                lda #<VUPOS2
+                sta zptmpB
+                lda #>VUPOS2
+                sta zptmpB+1                
+
+                ldy #0
+                ldx #MAX_VU-1
+vuloop:         lda #VUSYMBOL
+                cpy VU              ; If we're at or below the VU value we use the
+                bcc :+              ;   VUSYMBOL to draw the current char else we use
+                lda #MEDIUMSHADE    ;   the partial shade symbol
+:               sta (zptmp),y       ; Store the char in screen memory
+                sta tempOutput
+
+                tya                 ; 
+                pha                 ; Save Y
+                txa           
+                tay                 ; Move X into Y
+
+                lda tempOutput                
+                sta (zptmpB), y
+
+                pla
+                tay
+                iny
+                dex
+                cpy #MAX_VU
+                bcc vuloop
+
+                rts
 
 ;-----------------------------------------------------------------------------------
 ; Multiply		Multiplies X * Y == ResultLo/ResultHi
@@ -371,7 +434,6 @@ addrloop:		    lda lineChar
                 pla						            	    ; Restore Y
                 tay
                 rts
-
 
 ;-----------------------------------------------------------------------------------
 ; DrawSquare
@@ -491,36 +553,28 @@ donesquare:		  rts
 ;-----------------------------------------------------------------------------------
         
 OutputSymbolXY:	sta	tempOutput
+                stx tempX
+                sty tempY
 
-                txa
-                pha
-                tya
-                pha
                 jsr	GetCursorAddr				        ; Store the screen code in
                 stx zptmp						            ; screen RAM
                 sty zptmp+1
+
                 ldy #0
                 lda tempOutput
                 sta (zptmp),y
 
-              .if C64
-                pha									            ; Add difference to get us up
-                lda zptmp		   				          ; to color RAM and then store
-                clc									            ; the current color at the same
-                adc	#<(COLOR_MEM - SCREEN_MEM)	; offset into color RAM as we
-                sta zptmp						            ; did the char code into screen
-                lda zptmp+1						          ; memory
-                adc	#>(COLOR_MEM - SCREEN_MEM)
+                lda zptmp
+                clc
+                adc #<(COLOR_MEM - SCREEN_MEM)
+                sta zptmp
+                lda zptmp+1
+                adc #>(COLOR_MEM - SCREEN_MEM)
                 sta zptmp+1
-                lda	charColor
-                sta	(zptmp),y
-                pla
-              .endif
-
-                pla
-                tay
-                pla
-                tax
+                lda TEXT_COLOR
+                sta (zptmp),y
+                ldx tempX
+                ldy tempY
                 rts
 
 ;-----------------------------------------------------------------------------------
@@ -588,9 +642,6 @@ DrawBand:		    sta Height
                 txa					                    ; X pos will be column number times BAND_WIDTH plus margin
                 pha
                 asl						                  ; Multiplty column number by 2 or 4
-              .if XSIZE = 80
-                asl
-              .endif
                 clc	
                 adc #LEFT_MARGIN		            ; Add that to the left margin, and it's the left edge
                 sta SquareX
@@ -602,10 +653,8 @@ DrawBand:		    sta Height
                 sta SquareY
 
                 lda #BAND_HEIGHT - 1	
-              .if XSIZE = 40                  ; This optimization of erasing just down to the top
-                sec                             ; doesn't work on bands > 2 wide, where they have stuff
-                sbc Height                      ; in the middle that might need to be erased
-              .endif
+                sec                             
+                sbc Height                      
                 sta ClearHeight			            ; We clear the whole bar area
                 lda #' '				                ; Clear the top, empty portion of the bar
                 sta lineChar			
@@ -620,12 +669,24 @@ drawbar:
                 tax
                 rts
 
+;-----------------------------------------------------------------------------------
+; PlotEx		Replacement for KERNAL plot that fixes color ram update bug
+;-----------------------------------------------------------------------------------
+;				X		Cursor Y Pos
+;				Y   Cursor X Pos
+;       (NOTE Reversed)
+   -----------------------------------------------------------------------------------
+PlotEx:
+        bcs     :+
+        jsr     PLOT            ; Set cursor position using original ROM PLOT
+        jmp     UPDCRAMPTR      ; Set pointer to color RAM to match new cursor position
+:       jmp     PLOT            ; Get cursor position
+
 ; String literals at the end of file, as was the style at the time!
 
 startstr:       .literal "STARTING...", 13, 0
 exitstr:        .literal "EXITING...", 13, 0
 framestr:       .literal "  CURRENT FRAME: ", 0
 clrwhite:		    .literal $99, $93, 0
-
 .include "fakedata.inc"
 

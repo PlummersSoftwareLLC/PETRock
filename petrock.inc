@@ -6,25 +6,11 @@
 ;         Rutger van Bergen
 ;-----------------------------------------------------------------------------------
 
-.ifndef C64
-    C64         = 0
-.endif
-.ifndef PET
-    PET         = 0
-.endif
-
-.if (.not (PET .xor C64))
-    .fatal "Please define exactly one of PET or C64 to equal 1."
-.endif
-
 ; Definitions -----------------------------------------------------------------------
 
 DEBUG               = 1     ; Enable code that only is included for debug builds
 EPROM               = 0     ; When TRUE, no BASIC stub, no load address in file
 TIMING              = 0     ; Change border color to show drawing progress
-
-.if C64
-    __C64__      = 1
 
     .include "basic_c64.inc"
 
@@ -37,8 +23,8 @@ TIMING              = 0     ; Change border color to show drawing progress
     zptmp         = $FB
     zptmpB        = $FD
     zptmpC        = $22
-
-
+        
+    TEXT_COLOR    = $0286   ; Current output color
     SCRATCH_START = $033C   ; Second cassette buffer on PET
     SCRATCH_END   = $03FB   ; End of cassette buffer  
   	SCREEN_MEM    = $0400   ; Screen buffer of 1000 bytes
@@ -48,7 +34,6 @@ TIMING              = 0     ; Change border color to show drawing progress
     SCREEN_CONTROL = VIC_CTRL1
 
     COLOR_MEM     = $d800   ; Screen color memory of 1000 bytes
-
 
     ; Screen color codes
 
@@ -68,26 +53,6 @@ TIMING              = 0     ; Change border color to show drawing progress
     LIGHT_GREEN   = 13
     LIGHT_BLUE    = 14
     LIGHT_GREY    = 15
-.endif
-
-.if PET
-
-    __CBM510__   = 1        ; If building for the PET we'll assume 80 column machine
-    .if EPROM
-        BASE    = $B000     ; Open PET ROM space
-    .else
-        BASE    = $0401     ; PET Start of BASIC
-    .endif
-
-    zptmp  		  = $BD
-    zptmpB 		  = $00
-    zptmpC 		  = $1F
-    
-    SCRATCH_START = $033A   ; Second cassette buffer on PET
-    SCRATCH_END   = $03F9   ; End of cassette buffer  
-	  SCREEN_MEM    = $8000
-
-.endif
 
 ; Includes --------------------------------------------------------------------------
 
@@ -101,25 +66,33 @@ TIMING              = 0     ; Change border color to show drawing progress
 MINUTE_JIFFIES      = 3600              ; Number of jiffies in a minute
 SECOND_JIFFIES      = 60                ; Number of jiffies in a second
 
-CLRHOME		          = $93               ; Clear screen
-
+CLRHOME		        = $93               ; Clear screen
 
 ; Defines below this line should generally not require changing
 
-NUM_BANDS           = 16                        ; 16 bands in the spectrum data
+NUM_BANDS           = 16                ; 16 bands in the spectrum data
+MAX_VU              = 17                ; Maximum size per side of the VU meter
+
+; Center the VU meter on the second screen line
+
+VUPOS1              = SCREEN_MEM + XSIZE + XSIZE / 2 + 1
+VUPOS2              = SCREEN_MEM + XSIZE + 2
+VUCOLORPOS          = COLOR_MEM  + XSIZE + 2
 
 ; Symbol definitions for square drawing - PETSCI for graphics that make a square 
 
-TOPLEFTSYMBOL		  = 79                
+TOPLEFTSYMBOL       = 79                
 BOTTOMRIGHTSYMBOL	= 122               
 TOPRIGHTSYMBOL		= 80
 BOTTOMLEFTSYMBOL	= 76
-VLINE1SYMBOL		  = 101                         ; Vertical line left side
-VLINE2SYMBOL      = 103                         ; Vertical line right side
-HLINE1SYMBOL		  = 99                          ; Horizontal line top side
-HLINE2SYMBOL		  = 100                         ; Horizontal line bottom side
+VLINE1SYMBOL		= 101               ; Vertical line left side
+VLINE2SYMBOL        = 103               ; Vertical line right side
+HLINE1SYMBOL		= 119               ; Horizontal line top side
+HLINE2SYMBOL		= 111               ; Horizontal line bottom side
+MEDIUMSHADE         = 45                ; Symbol for an empty VU square
+VUSYMBOL            = 244               ; Symbol for a filled VU square
 
-; System Locations ----------------------------------------------------------
+; Our UI Definitions ------------------------------------------------------
 
 .if XSIZE = 40
     BAND_WIDTH      = 2
@@ -134,6 +107,7 @@ TOP_MARGIN          = 3
 BOTTOM_MARGIN       = 2
 BAND_HEIGHT         = 20
 
+
 ;----------------------------------------------------------------------------
 ; Common definitions for all Commodore BASICs
 ;----------------------------------------------------------------------------
@@ -141,17 +115,17 @@ BAND_HEIGHT         = 20
 	QUOT		          = $22 ; Quote characarter
 	CURDN		          = $11 ; cursor down
 ;---------- tokens ----------------------------------------------------------
-	TK_MUL		        = $ac ; *
-	TK_POW		        = $ae ; ^
+	TK_MUL		          = $ac ; *
+	TK_POW		          = $ae ; ^
 	TK_GT		          = $b1 ; >
-	TK_EQU		        = $b2 ; =
+	TK_EQU		          = $b2 ; =
 	TK_LT		          = $b3 ; <
 	TK_IF		          = $8b ; IF
-	TK_REM		        = $8f ; REM
-	TK_PRINT	        = $99 ; PRINT
-	TK_SYS		        = $9e ; SYS
-	TK_NEW		        = $a2 ; NEW
-	TK_THEN		        = $a7 ; THEN
-	TK_PEEK		        = $c2 ; PEEK
+	TK_REM		          = $8f ; REM
+	TK_PRINT	          = $99 ; PRINT
+	TK_SYS		          = $9e ; SYS
+	TK_NEW		          = $a2 ; NEW
+	TK_THEN		          = $a7 ; THEN
+	TK_PEEK		          = $c2 ; PEEK
 
 .assert (TOP_MARGIN + BOTTOM_MARGIN + BAND_HEIGHT <= YSIZE), error
