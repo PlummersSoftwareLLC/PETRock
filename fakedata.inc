@@ -286,8 +286,8 @@ PeakData:
    .byte 15
    .byte 13
    .byte 13
-   .byte 15
-   .byte 15
+   .byte 18
+   .byte 17
    .byte 15
    .byte 14
    .byte 14
@@ -303,8 +303,8 @@ PeakData:
    .byte 07
    .byte 06
    .byte 15
-   .byte 15
-   .byte 13
+   .byte 18
+   .byte 16
    .byte 11
    .byte 09
    .byte 07
@@ -319,7 +319,7 @@ PeakData:
    .byte 02
    .byte 04
    .byte 07
-   .byte 15
+   .byte 18
    .byte 15
    .byte 13
    .byte 12
@@ -357,8 +357,8 @@ PeakData:
    .byte 07
    .byte 03
    .byte 13
-   .byte 12
    .byte 15
+   .byte 17
    .byte 13
    .byte 10
    .byte 07

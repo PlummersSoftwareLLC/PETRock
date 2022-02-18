@@ -95,9 +95,11 @@ start:          cld
 
                 jsr EmptyBorder
 drawLoop:	  
-:       				bit SCREEN_CONTROL              ; Wait for a known point in the raster
+              .if WAIT_FOR_RASTER
+;:       				bit RASTHI              ; Wait for a known point in the raster
                 bpl :-
-                
+              .endif                
+
               .if TIMING
                 lda #DARK_GREY
                 sta BORDER_COLOR
@@ -140,9 +142,11 @@ drawLoop:
                 sta BORDER_COLOR			
               .endif
 
-:			        	bit SCREEN_CONTROL
+              .if WAIT_FOR_RASTER
+:			        	bit RASTHI                      
                 bmi :-
-
+              .endif
+              
                 jsr GETIN				                ; Keyboard Handling
                 cmp #$03
                 bne drawLoop
@@ -616,12 +620,18 @@ DrawHLine:		  sta tempDrawLine					          ; Start at the X/Y pos in screen me
 
                 ldy tempDrawLine                 ; Draw the line
                 dey
-:				        lda lineChar                     ; Store the line character in screen ram
-                sta (zptmp), y
-                lda TEXT_COLOR                   ; Store current color in color ram
-                sta (zptmpB), y
+				        lda lineChar                     ; Store the line character in screen ram
+:               sta (zptmp), y
                 dey                              ; Rinse and repeat
                 bpl :-
+
+                ldy tempDrawLine                 ; Draw the line
+                dey
+				        lda TEXT_COLOR                   ; Store current color in color ram
+:               sta (zptmpB), y
+                dey                              ; Rinse and repeat
+                bpl :-
+
 
                 pla                              ; Restore X, Y
                 tax
@@ -652,22 +662,23 @@ vloop:			    lda lineChar				              ; Store the line char in screen mem
                 ldy #0
                 sta (zptmp), y
 
-                lda zptmp                         ; Add the offset to color memory
-                clc                               ;  to the character pointer and
-                adc #<(COLOR_MEM - SCREEN_MEM)    ;  then store the current color
-                sta zptmpB                        ;  in color memory where it goes
-                lda zptmp+1
-                adc #>(COLOR_MEM - SCREEN_MEM)
-                sta zptmpB+1
+                lda zptmpB
+                clc
+                adc #XSIZE
+                sta zptmpB
+                bcc :+
+                inc zptmpB+1
+:
                 lda TEXT_COLOR
                 sta (zptmpB), y
-
+                
                 lda zptmp					                ; Now add 40/80 to the lsb of ptr
                 clc
                 adc #XSIZE
                 sta zptmp
                 bcc :+						
                 inc zptmp+1				            	  ; On overflow in the msb as well
+                
 :
 
 				        dec tempDrawLine			            ; One less line to go

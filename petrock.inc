@@ -11,6 +11,7 @@
 DEBUG               = 1     ; Enable code that only is included for debug builds
 EPROM               = 0     ; When TRUE, no BASIC stub, no load address in file
 TIMING              = 0     ; Change border color to show drawing progress
+WAIT_FOR_RASTER     = 0     ; Align drawing to screen raster
 
     .include "basic_c64.inc"
 
@@ -31,7 +32,9 @@ TIMING              = 0     ; Change border color to show drawing progress
 
     SCREEN_COLOR   = VIC_BG_COLOR0
     BORDER_COLOR   = VIC_BORDERCOLOR 
-    SCREEN_CONTROL = VIC_CTRL1
+    
+    RASTHI         = $D011  ; Hiword of screen raster   
+    RASTLO         = $D012  ; Loword of screen raster
 
     COLOR_MEM     = $d800   ; Screen color memory of 1000 bytes
 
