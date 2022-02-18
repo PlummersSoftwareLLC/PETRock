@@ -25,4 +25,3 @@ jobs:
     - name: "Assemble PETRock"
       run: | 
           cc65/bin/cl65 --verbose  --asm-define C64=1 -o c64rock.prg -t none petrock.asm
-     
