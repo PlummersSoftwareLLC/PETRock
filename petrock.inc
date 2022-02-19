@@ -34,6 +34,21 @@ RASTLO            = $D012  ; Loword of screen raster
 
 COLOR_MEM         = $d800   ; Screen color memory of 1000 bytes
 
+; Clock related items
+
+TALO              = $DD04
+TAHI              = $DD05
+CTLO              = $DD06
+CTHI              = $DD07
+ICR               = $DD0D
+CRA               = $DD0E
+CRB               = $DD0F
+VICIRQ            = $D019
+LATEN             = $FA
+KEYVAL            = $FC
+
+TIMERSCALE        = 1022    ; Clock runs at 1.022MHz
+    
 ; Screen color codes
 
 BLACK             = 0
@@ -65,14 +80,18 @@ LIGHT_GREY        = 15
 MINUTE_JIFFIES      = 3600              ; Number of jiffies in a minute
 SECOND_JIFFIES      = 60                ; Number of jiffies in a second
 
-CLRHOME		        = $93               ; Clear screen
+CLRHOME		    = $93               ; Clear screen
 
 ; Defines below this line should generally not require changing
 
 NUM_BANDS           = 16                ; 16 bands in the spectrum data
 MAX_VU              = 17                ; Maximum size per side of the VU meter
+STATIC_COLOR        = 1                 ; Pre-paint the band color and never change it
+
 FRAMESPERSHIFT      = 0                 ; We scroll color every this many frames
                                         ;  or not at all if set to zero
+
+.assert !(STATIC_COLOR && FRAMESPERSHIFT), error, "STATIC_COLOR cannot be used with nonzero FRAMESPERSHIFT"
 
 ; Center the VU meter on the second screen line
 
@@ -83,27 +102,21 @@ VUCOLORPOS          = COLOR_MEM  + XSIZE + 2
 ; Symbol definitions for square drawing - PETSCI for graphics that make a square 
 
 TOPLEFTSYMBOL       = 79                
-BOTTOMRIGHTSYMBOL	= 122               
-TOPRIGHTSYMBOL		= 80
-BOTTOMLEFTSYMBOL	= 76
-VLINE1SYMBOL		= 101               ; Vertical line left side
+BOTTOMRIGHTSYMBOL   = 122               
+TOPRIGHTSYMBOL	    = 80
+BOTTOMLEFTSYMBOL    = 76
+VLINE1SYMBOL	    = 101               ; Vertical line left side
 VLINE2SYMBOL        = 103               ; Vertical line right side
-HLINE1SYMBOL		= 119               ; Horizontal line top side
-HLINE2SYMBOL		= 111               ; Horizontal line bottom side
+HLINE1SYMBOL	    = 119               ; Horizontal line top side
+HLINE2SYMBOL	    = 111               ; Horizontal line bottom side
 MEDIUMSHADE         = 45                ; Symbol for an empty VU square
 VUSYMBOL            = 244               ; Symbol for a filled VU square
 
 ; Our UI Definitions ------------------------------------------------------
 
-.if XSIZE = 40
-    BAND_WIDTH      = 2
-    LEFT_MARGIN     = 4
-.endif
-.if XSIZE = 80
-    BAND_WIDTH      = 4
-    LEFT_MARGIN     = 8
-.endif
-
+LEFT_MARGIN         = 4
+RIGHT_MARGIN        = LEFT_MARGIN
+BAND_WIDTH          = 2
 TOP_MARGIN          = 3
 BOTTOM_MARGIN       = 2
 BAND_HEIGHT         = 20
@@ -112,21 +125,21 @@ BAND_HEIGHT         = 20
 ;----------------------------------------------------------------------------
 ; Common definitions for all Commodore BASICs
 ;----------------------------------------------------------------------------
-	CR			          = $0D ; CARRIAGE RETURN
-	QUOT		          = $22 ; Quote characarter
-	CURDN		          = $11 ; cursor down
+        CR			  = $0D ; CARRIAGE RETURN
+        QUOT		          = $22 ; Quote characarter
+        CURDN		          = $11 ; cursor down
 ;---------- tokens ----------------------------------------------------------
-	TK_MUL		          = $ac ; *
-	TK_POW		          = $ae ; ^
-	TK_GT		          = $b1 ; >
-	TK_EQU		          = $b2 ; =
-	TK_LT		          = $b3 ; <
-	TK_IF		          = $8b ; IF
-	TK_REM		          = $8f ; REM
-	TK_PRINT	          = $99 ; PRINT
-	TK_SYS		          = $9e ; SYS
-	TK_NEW		          = $a2 ; NEW
-	TK_THEN		          = $a7 ; THEN
-	TK_PEEK		          = $c2 ; PEEK
+        TK_MUL		          = $ac ; *
+        TK_POW		          = $ae ; ^
+        TK_GT		          = $b1 ; >
+        TK_EQU		          = $b2 ; =
+        TK_LT		          = $b3 ; <
+        TK_IF		          = $8b ; IF
+        TK_REM		          = $8f ; REM
+        TK_PRINT	          = $99 ; PRINT
+        TK_SYS		          = $9e ; SYS
+        TK_NEW		          = $a2 ; NEW
+        TK_THEN		          = $a7 ; THEN
+        TK_PEEK		          = $c2 ; PEEK
 
 .assert (TOP_MARGIN + BOTTOM_MARGIN + BAND_HEIGHT <= YSIZE), error

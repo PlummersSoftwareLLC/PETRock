@@ -55,20 +55,20 @@ ScratchEnd:
                 .org 0000
                 .word BASE
                 .org  BASE
-Line10:         .word Line15                    ; Next line number
-                .word 10                        ; Line Number 10    
+Line10:         .word Line1                     ; Next line number
+                .word 0                         ; Line Number 10    
                 .byte TK_REM                    ; REM token
                 .literal " - SPECTRUM ANALYZER DISPLAY", 00
-Line15:         .word Line16
-                .word 15
+Line1:          .word Line2
+                .word 1
                 .byte TK_REM
                 .literal " - GITHUB/PLUMMERSSOFTWARELLC/", 00
-Line16:         .word Line20
-                .word 16
+Line2:         .word Line3
+                .word 2
                 .byte TK_REM
                 .literal " - PETROCK - COPYRIGHT 2022", 00                
-Line20:         .word endOfBasic                ; PTR to next line, which is 0000
-                .word 20                        ; Line Number 20
+Line3:         .word endOfBasic                ; PTR to next line, which is 0000
+                .word 3                        ; Line Number 20
                 .byte TK_SYS                    ;   SYS token
                 .literal " "
                 .literal .string(*+7)           ; Entry is 7 bytes from here, which
@@ -84,17 +84,15 @@ endOfBasic:     .word 00                        ;   the +7 expression above, as 
 
 start:          cld
                 jsr InitVariables               ; Since we can be in ROM, zero stuff out
-
                 lda #BLACK
                 sta SCREEN_COLOR
                 sta BORDER_COLOR
 
                 jsr EmptyBorder
-drawLoop:	  
-              .if WAIT_FOR_RASTER
-:       				bit RASTHI                      ; Wait for the high byte in the raster counter
-                bpl :-                          ; to become non-zero, indicating scan line 256+
-              .endif                
+
+drawLoop:	      jsr InitTimer                   ; Prep the timer
+                lda #$11                        ; Start the timer
+                sta CRA
 
               .if TIMING
                 lda #DARK_GREY
@@ -102,47 +100,19 @@ drawLoop:
               .endif
 
                 jsr FillPeaks
-
-                lda #LIGHT_BLUE
-                sta TEXT_COLOR
-
-                ldx #24                          ; Print "Current Frame" banner
-                ldy #09
-                clc
-                jsr PlotEx
-                ldy #>framestr                   
-                lda #<framestr
-                jsr WriteLine
-
-                ldx DataIndex
-                lda #0
-                jsr BASIC_INTOUT
-                lda #' '
-                jsr CHROUT
-                jsr CHROUT
               
-                lda #LIGHT_GREEN
+                lda #LIGHT_BLUE
                 sta TEXT_COLOR
 
                 jsr DrawVU                      ; Draw the VU bar at the top of the screen
 
-                ldx #NUM_BANDS - 1              ; Draw each of the bands in reverse order
+drawAllBands:   ldx #NUM_BANDS - 1              ; Draw each of the bands in reverse order
 :
            			lda Peaks, x                    ; Scroll the others in place
                 jsr DrawBand
                 dex
                 bpl :-
 
-              .if TIMING
-                lda #BLACK
-                sta BORDER_COLOR			
-              .endif
-
-              .if WAIT_FOR_RASTER
-:			        	bit RASTHI                      ; Wait for the bit byte of the raster counter                      
-                bmi :-                          
-              .endif
-                
                 ; Check to see its time to scroll the color
 
               .if FRAMESPERSHIFT > 0
@@ -155,7 +125,50 @@ drawLoop:
                 jsr ScrollColors
 :             .endif
 
-                jsr GETIN				                ; Keyboard Handling
+              .if TIMING
+                lda #BLACK
+                sta BORDER_COLOR			
+              .endif
+
+              lda #0                          ; Stop the clock
+              sta CRA
+
+              .if WAIT_FOR_RASTER
+:			        	bit RASTHI                      ; Wait for the bit byte of the raster counter                      
+                bmi :-                          
+              .endif
+
+
+
+                lda #LIGHT_BLUE
+                sta TEXT_COLOR
+
+                ldx #24                          ; Print "Current Frame" banner
+                ldy #09
+                clc
+                jsr PlotEx
+                ldy #>framestr                   
+
+                lda #<framestr
+                jsr WriteLine
+
+                lda CTLO                        ; Display the number of ms the frame took. I realized
+                eor #$FF                        ; that 65536 - time is the same as flipping the bits, 
+                tax                             ; so that's why I xor instead of subtracting
+                lda CTHI
+                eor #$ff
+                jsr BASIC_INTOUT
+                lda #' '
+                jsr CHROUT
+                lda #'M'
+                jsr CHROUT
+                lda #'S'
+                jsr CHROUT
+                lda #' '
+                jsr CHROUT
+                jsr CHROUT
+
+                jsr GETIN				                ; Keyboard Handling - check for RUN            
                 cmp #$03
                 bne drawLoop
 
@@ -165,8 +178,8 @@ drawLoop:
 
                 rts
 
-EmptyBorder:    ldy #>clrwhite                  ; Set cursor to white and clear screen
-                lda #<clrwhite
+EmptyBorder:    ldy #>clrGREEN                  ; Set cursor to white and clear screen
+                lda #<clrGREEN
                 jsr WriteLine
                 lda #0
                 sta SquareX
@@ -177,6 +190,9 @@ EmptyBorder:    ldy #>clrwhite                  ; Set cursor to white and clear 
                 sta Height
                 jsr DrawSquare
                 jsr InitVU                      ; Let the VU meter paint its color mem, etc
+              .if STATIC_COLOR  
+                jsr FillBandColors
+              .endif  
                 rts
 
 ScrollBands:    lda Peaks+NUM_BANDS-1           ; Wrap data around from end to start
@@ -576,6 +592,7 @@ OutputSymbolXY:	sta	tempOutput
                 lda tempOutput
                 sta (zptmp),y
 
+              .if !STATIC_COLOR
                 lda zptmp
                 clc
                 adc #<(COLOR_MEM - SCREEN_MEM)
@@ -585,9 +602,9 @@ OutputSymbolXY:	sta	tempOutput
                 sta zptmp+1
                 lda TEXT_COLOR
                 sta (zptmp),y
+              .endif
                 ldx tempX
                 ldy tempY
-
                 rts
 
 ;-----------------------------------------------------------------------------------
@@ -616,7 +633,8 @@ DrawHLine:		  sta tempDrawLine					         ; Start at the X/Y pos in screen mem
                 jsr GetCursorAddr
                 stx zptmp
                 sty zptmp+1
-                
+
+              .if !STATIC_COLOR                
                 txa                              ; Add the distance to color memory to
                 clc                              ; the zptmp pointer and store it in
                 adc #<(COLOR_MEM - SCREEN_MEM)   ; zptmpB so that it in turn points at
@@ -625,6 +643,7 @@ DrawHLine:		  sta tempDrawLine					         ; Start at the X/Y pos in screen mem
                 clc
                 adc #>(COLOR_MEM - SCREEN_MEM)
                 sta zptmpB+1
+              .endif
 
                 ldy tempDrawLine                 ; Draw the line
                 dey
@@ -633,12 +652,14 @@ DrawHLine:		  sta tempDrawLine					         ; Start at the X/Y pos in screen mem
                 dey                              ; Rinse and repeat
                 bpl :-
 
+              .if !STATIC_COLOR
                 ldy tempDrawLine                 ; Draw the line
                 dey
 				        lda TEXT_COLOR                   ; Store current color in color ram
 :               sta (zptmpB), y
                 dey                              ; Rinse and repeat
                 bne :-
+              .endif
 
                 pla                              ; Restore X, Y
                 tax
@@ -655,6 +676,7 @@ DrawVLine:		  sta tempDrawLine			            ; Start at the X/Y pos in screen me
                 stx zptmp                         ;   line's X/Y start position
                 sty zptmp+1
 
+              .if !STATIC_COLOR
                 txa                               ; Take the screen memory pointer and add
                 clc                               ;   the distance to color memory to it, 
                 adc #<(COLOR_MEM - SCREEN_MEM)    ;   so zptmpB points at the right area of
@@ -663,14 +685,16 @@ DrawVLine:		  sta tempDrawLine			            ; Start at the X/Y pos in screen me
                 clc
                 adc #>(COLOR_MEM - SCREEN_MEM)
                 sta zptmpB+1
+              .endif
 
 vloop:			    lda lineChar				              ; Store the line char in screen mem
 
                 ldy #0
                 sta (zptmp), y
+
+              .if !STATIC_COLOR   
                 lda TEXT_COLOR
                 sta (zptmpB), y
-
                 lda zptmpB
                 clc
                 adc #XSIZE
@@ -678,6 +702,7 @@ vloop:			    lda lineChar				              ; Store the line char in screen mem
                 bcc :+
                 inc zptmpB+1
 :
+              .endif
 
                 lda zptmp					                ; Now add 40/80 to the lsb of ptr
                 clc
@@ -700,8 +725,45 @@ vloop:			    lda lineChar				              ; Store the line char in screen mem
 ;-----------------------------------------------------------------------------------
 
 BandColors:     .byte RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE,  RED
-                .byte ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, RED, ORANGE
+                .byte ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, RED, YELLOW
                 BandColorSize = * - BandColors
+                .assert(BandColorSize >= (XSIZE - LEFT_MARGIN - RIGHT_MARGIN) / BAND_WIDTH), error
+
+.if STATIC_COLOR
+FillBandColors: lda #YSIZE-TOP_MARGIN-BOTTOM_MARGIN   ; Count of rows to paint color for
+                sta tempY
+                BAND_COLOR_LOC = COLOR_MEM + XSIZE * TOP_MARGIN + LEFT_MARGIN
+                lda #<BAND_COLOR_LOC
+                sta zptmp
+                lda #>BAND_COLOR_LOC
+                sta zptmp+1
+
+fcrow:          ldx #BandColorSize-1               ; X is length of color table
+                txa
+                asl                                ; We start at the right edge of each column
+                clc
+                adc #BAND_WIDTH-1
+                tay
+fcloop:         lda BandColors,x
+                sta (zptmp),y
+                dey
+                sta (zptmp),y
+                dey
+                dex
+                bpl fcloop
+
+                lda zptmp
+                clc
+                adc #XSIZE
+                sta zptmp
+                bcc :+
+                inc zptmp+1
+
+:               dec tempY
+                bne fcrow
+
+                rts
+.endif
 
 DrawBand:		    sta Height
 
@@ -730,8 +792,10 @@ DrawBand:		    sta Height
                 jsr FillSquare
 
                 lda #(BAND_HEIGHT + TOP_MARGIN)
+              .if BAND_WIDTH <= 2  
                 sec                             ; doesn't work on bands > 2 wide, where they have stuff
                 sbc Height                      ; in the middle that might need to be erased
+              .endif  
                 sta SquareY
                 jsr DrawSquare
                 pla
@@ -772,11 +836,28 @@ PlotEx:
         jmp     UPDCRAMPTR      ; Set pointer to color RAM to match new cursor position
 :       jmp     PLOT            ; Get cursor position
 
+; Init Timer
+
+InitTimer:
+
+        lda   #$7F              ; Mask to turn off the CIA IRQ
+        ldx   #<TIMERSCALE      ; Timer low value
+        ldy   #>TIMERSCALE      ; Timer High value
+        sta   ICR               
+        stx   TALO              ; Set to 1msec (1022 cycles per IRQ)
+        sty   TAHI
+        lda   #$FF              ; Set counter to FFFF
+        sta   CTLO              
+        sta   CTHI
+        ldy   #$51
+        sty   CRB               ; Enable and go
+        rts
+
 ; String literals at the end of file, as was the style at the time!
 
 startstr:       .literal "STARTING...", 13, 0
 exitstr:        .literal "EXITING...", 13, 0
-framestr:       .literal "  CURRENT FRAME: ", 0
-clrwhite:		    .literal $99, $93, 0
+framestr:       .literal "  RENDER TIME: ", 0
+clrGREEN:		    .literal $99, $93, 0
 .include "fakedata.inc"
 
