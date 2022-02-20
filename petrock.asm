@@ -40,7 +40,10 @@ ScratchStart:
     resultHi:		     .res  1
     shiftCountdown:  .res  1                    ; We scroll color every N frames
     VU:              .res  1                    ; VU Audio Data
-    Peaks:           .res  NUM_BANDS            ; Peak Data for current frame    
+    Peaks:           .res  NUM_BANDS            ; Peak Data for current frame   
+
+.include "serdrv.var"                           ; Include serial driver variables    
+
 ScratchEnd:
 
 .assert * <= SCRATCH_END, error                 ; Make sure we haven't run off the end of the buffer
@@ -82,7 +85,13 @@ endOfBasic:     .word 00                        ;   the +7 expression above, as 
 ; Start of Assembly Code
 ;-----------------------------------------------------------------------------------
 
-start:          cld
+start:          jmp realStart
+
+.include "serdrv.s"                             ; Include serial driver routines here, so
+                                                ;   they're available from this point 
+                                                ;   onwards
+
+realStart:      cld
                 jsr InitVariables               ; Since we can be in ROM, zero stuff out
                 lda #BLACK
                 sta SCREEN_COLOR
@@ -90,7 +99,7 @@ start:          cld
 
                 jsr EmptyBorder
 
-drawLoop:	      jsr InitTimer                   ; Prep the timer
+drawLoop:       jsr InitTimer                   ; Prep the timer
                 lda #$11                        ; Start the timer
                 sta CRA
 
