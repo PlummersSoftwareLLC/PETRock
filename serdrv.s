@@ -140,10 +140,10 @@ PutSerialChar:
 
 
 ;----------------------------------------------------------------------------
-; SerIoctl: Pass 0 in A to disable serial, 2 to enable
+; SerialIoctl: Pass 0 in A to disable serial, 2 to enable
 ;
 
-SerIoctl:
+SerialIoctl:
       cmp #0
       beq @disable
 @enable:

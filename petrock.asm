@@ -22,23 +22,23 @@ __C64__ = 1                             ; Only the C64 is supported
 ; will be initlialzed to 0 bytes at application startup.
 
 ScratchStart:
-    tempFillSquare:	 .res  1            ; Temp used by FillSquare
+    tempFillSquare:  .res  1            ; Temp used by FillSquare
     tempDrawLine:    .res  1            ; Temp used by DrawLine
     tempOutput:      .res  1            ; Temp used by OutputSymbol
     tempByteCopy:    .res  1
     tempHeight:      .res  1            ; Used by DrawBand
     tempX:           .res  1            ; Preserve X Pos
     tempY:           .res  1            ; Preserve Y Pos
-    lineChar:	     .res  1            ; Line draw char
-    SquareX:	     .res  1            ; Args for DrawSquare
-    SquareY:	     .res  1
-    Width:		     .res  1
-    Height:		     .res  1		    ; Height of area to draw
-    ClearHeight:     .res  1		    ; Height of area to clear
+    lineChar:        .res  1            ; Line draw char
+    SquareX:         .res  1            ; Args for DrawSquare
+    SquareY:         .res  1
+    Width:           .res  1
+    Height:          .res  1            ; Height of area to draw
+    ClearHeight:     .res  1            ; Height of area to clear
     DataIndex:       .res  1            ; Index into fakedata for demo
     MultiplyTemp:    .res  1            ; Scratch variable for multiply code
-    resultLo:	     .res  1            ; Results from multiply operations
-    resultHi:	     .res  1
+    resultLo:        .res  1            ; Results from multiply operations
+    resultHi:        .res  1
     shiftCountdown:  .res  1            ; We scroll color every N frames
     VU:              .res  1            ; VU Audio Data
     Peaks:           .res  NUM_BANDS    ; Peak Data for current frame
@@ -215,7 +215,7 @@ ScrollBands:    lda Peaks+NUM_BANDS-1 ; Wrap data around from end to start
                 pha
                 lda #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 tax
-:         	   	lda Peaks, x          ; Scroll the others in place
+:               lda Peaks, x          ; Scroll the others in place
                 sta Peaks+1, x
                 dex
                 bpl :-
@@ -288,10 +288,10 @@ InitVariables:  ldx #ScratchEnd-ScratchStart
 ;-----------------------------------------------------------------------------------
 ; GetCursorAddr - Returns address of X/Y position on screen
 ;-----------------------------------------------------------------------------------
-;		IN  X:	X pos
-;       IN  Y:  Y pos
-;       OUT X:  lsb of address
-;       OUT Y:  msb of address
+;           IN  X:  X pos
+;           IN  Y:  Y pos
+;           OUT X:  lsb of address
+;           OUT Y:  msb of address
 ;-----------------------------------------------------------------------------------
 
 ScreenLineAddresses:
@@ -332,10 +332,10 @@ ClearScreen:    lda #CLRHOME          ; PETSCII for clear screen
                 rts
 
 ;-----------------------------------------------------------------------------------
-; WriteLine - Writes a line of text to the screen using CHROUT ($FFD2)
+; WriteLine -   Writes a line of text to the screen using CHROUT ($FFD2)
 ;-----------------------------------------------------------------------------------
-;           Y:  MSB of address of null-terminated string
-;           A:  LSB
+;               Y:  MSB of address of null-terminated string
+;               A:  LSB
 ;-----------------------------------------------------------------------------------
 
 WriteLine:      sta zptmp
@@ -407,10 +407,10 @@ vuloop:         lda #VUSYMBOL
                 rts
 
 ;-----------------------------------------------------------------------------------
-; Multiply		Multiplies X * Y == ResultLo/ResultHi
+; Multiply      Multiplies X * Y == ResultLo/ResultHi
 ;-----------------------------------------------------------------------------------
-;				X		8 bit value in
-;				Y		8 bit value in
+;               X   8 bit value in
+;               Y   8 bit value in
 ;
 ; Apparent credit to Leif Stensson for this approach!
 ;-----------------------------------------------------------------------------------
@@ -443,7 +443,7 @@ no_add:         ror
 ; lineChar
 ;-----------------------------------------------------------------------------------
 
-FillSquare:	    tya                   ; Save Y
+FillSquare:     tya                   ; Save Y
                 pha
                 txa                   ; Save X
                 pha
@@ -494,112 +494,112 @@ addrloop:       lda lineChar
 ; Height         Arg: Square Height     Must be 2+
 ;-----------------------------------------------------------------------------------
 
-DrawSquare:		  ldx	SquareX
-                ldy	SquareY
+DrawSquare:     ldx SquareX
+                ldy SquareY
 
-                lda	Height            ; Early out - do nothing for less than 2 height
+                lda Height            ; Early out - do nothing for less than 2 height
                 cmp #2
                 bpl :+
                 rts
 :
-                lda	Width             ; Early out - do nothing for less than 2 width
+                lda Width             ; Early out - do nothing for less than 2 width
                 cmp #2
                 bpl :+
                 rts
 :
-                lda	#TOPLEFTSYMBOL    ; Top Left Corner
-                jsr	OutputSymbolXY
+                lda #TOPLEFTSYMBOL    ; Top Left Corner
+                jsr OutputSymbolXY
                 lda #HLINE1SYMBOL     ; Top Line
-                sta	lineChar
-                lda	Width
+                sta lineChar
+                lda Width
                 sec
                 sbc #2                ; 2 less due to start and end chars
                 cmp #1
                 bmi :+
                 inx                   ; start one over after start char
-                jsr	DrawHLine
+                jsr DrawHLine
                 dex                   ; put x back where it was
 :
                 lda #VLINE1SYMBOL     ; Otherwise draw middle vertical lines
-                sta	lineChar
-                lda	Height
+                sta lineChar
+                lda Height
                 sec
                 sbc #2
                 cmp #1
                 bmi :+
                 iny
-                jsr	DrawVLine
+                jsr DrawVLine
                ; dey                  ; Normally post-dec Y to fix it up, but not needed here
 :                                     ;   because Y is loaded explicitly below anyway
-                lda	SquareX
+                lda SquareX
                 clc
-                adc	Width
+                adc Width
                 sec
                 sbc #1
                 tax
                 ldy SquareY
-                lda	#TOPRIGHTSYMBOL
-                jsr	OutputSymbolXY
+                lda #TOPRIGHTSYMBOL
+                jsr OutputSymbolXY
 
                 lda #VLINE2SYMBOL
-                sta	lineChar
-                lda	Height
+                sta lineChar
+                lda Height
                 sec
                 sbc #2
                 iny
-                jsr	DrawVLine
+                jsr DrawVLine
 bottomline:
-                ldx	SquareX
-                lda	SquareY
+                ldx SquareX
+                lda SquareY
                 clc
-                adc	Height
+                adc Height
                 sec
-                sbc	#1
+                sbc #1
                 tay
-                lda	#BOTTOMLEFTSYMBOL
-                jsr	OutputSymbolXY
+                lda #BOTTOMLEFTSYMBOL
+                jsr OutputSymbolXY
                 lda #HLINE2SYMBOL
-                sta	lineChar
+                sta lineChar
 
-                lda	Width
+                lda Width
                 sec
                 sbc #2                ; Account for first and las chars
                 inx                   ; Start one over past stat char
-                jsr	DrawHLine
+                jsr DrawHLine
               ; dex                   ; Put X back where it was if you need to preserve X
 
                 lda SquareX
                 clc
-                adc	Width
+                adc Width
                 sec
                 sbc #1
                 tax
-                lda	SquareY
+                lda SquareY
                 clc
-                adc	Height
+                adc Height
                 sec
                 sbc #1
                 tay
-                lda	#BOTTOMRIGHTSYMBOL
-                jsr	OutputSymbolXY
+                lda #BOTTOMRIGHTSYMBOL
+                jsr OutputSymbolXY
 donesquare:     rts
 
 ;-----------------------------------------------------------------------------------
-; OutputSymbolXY	Draws the given symbol A into the screen at pos X, Y
+; OutputSymbolXY    Draws the given symbol A into the screen at pos X, Y
 ;-----------------------------------------------------------------------------------
-;				X		X Coord	[PRESERVED]
-;				Y		Y Coord [PRESERVED]
-;				A		Symbol
+;               X       X Coord [PRESERVED]
+;               Y       Y Coord [PRESERVED]
+;               A       Symbol
 ;-----------------------------------------------------------------------------------
 ; Unlike my original impl, this doesn't merge, so lines can't intersect, but this
 ; way no intermediate buffer is required and it draws right to the screen directly.
 ;-----------------------------------------------------------------------------------
 
-OutputSymbolXY:	sta	tempOutput
+OutputSymbolXY: sta tempOutput
                 stx tempX
                 sty tempY
 
-                jsr	GetCursorAddr     ; Store the screen code in
+                jsr GetCursorAddr     ; Store the screen code in
                 stx zptmp             ; screen RAM
                 sty zptmp+1
 
@@ -623,11 +623,11 @@ OutputSymbolXY:	sta	tempOutput
                 rts
 
 ;-----------------------------------------------------------------------------------
-; DrawHLine		Draws a horizontal line in the offscreen buffer
+; DrawHLine     Draws a horizontal line in the offscreen buffer
 ;-----------------------------------------------------------------------------------
-;				X		X Coord of Start [PRESERVED]
-;				Y		Y Coord of Start [PRESERVED]
-;				A		Length of line
+;               X       X Coord of Start [PRESERVED]
+;               Y       Y Coord of Start [PRESERVED]
+;               A       Length of line
 ;-----------------------------------------------------------------------------------
 ; BUGBUG (Optimization, Davepl) - This code draws color RAM edvery time a line is
 ; drawn, which would allow for different colors every time, which might be cool, but
@@ -733,10 +733,10 @@ vloop:          lda lineChar          ; Store the line char in screen mem
                 rts
 
 ;-----------------------------------------------------------------------------------
-; DrawBand		Draws a single band of the spectrum analyzer
+; DrawBand      Draws a single band of the spectrum analyzer
 ;-----------------------------------------------------------------------------------
-;				X		Band Number		[PRESERVED]
-;				A		Height of bar
+;               X       Band Number     [PRESERVED]
+;               A       Height of bar
 ;-----------------------------------------------------------------------------------
 
 BandColors:     .byte RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE,  RED
@@ -931,11 +931,11 @@ ScrollColors:   lda BandColors+BandColorSize-1  ; Save a copy of the last table 
 
 
 ;-----------------------------------------------------------------------------------
-; PlotEx		Replacement for KERNAL plot that fixes color ram update bug
+; PlotEx        Replacement for KERNAL plot that fixes color ram update bug
 ;-----------------------------------------------------------------------------------
-;				X		Cursor Y Pos
-;				Y   Cursor X Pos
-;       (NOTE Reversed)
+;               X       Cursor Y Pos
+;               Y       Cursor X Pos
+;               (NOTE Reversed)
 ;-----------------------------------------------------------------------------------
 PlotEx:
                 bcs     :+
@@ -998,7 +998,7 @@ SetNextStyle:   lda NextStyle         ; Take the style index and multiply by 2
 startstr:       .literal "STARTING...", 13, 0
 exitstr:        .literal "EXITING...", 13, 0
 framestr:       .literal "  RENDER TIME: ", 0
-clrGREEN:		    .literal $99, $93, 0
+clrGREEN:       .literal $99, $93, 0
 
 ; Visual style definitions.  See the 'visualDef' structure defn in petrock.inc
 ; Each of these small tables includes the characters needed to draw the corners,
