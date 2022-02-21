@@ -26,6 +26,7 @@ ScratchStart:
     tempDrawLine:    .res  1            ; Temp used by DrawLine
     tempOutput:      .res  1            ; Temp used by OutputSymbol
     tempByteCopy:    .res  1
+    tempHeight:      .res  1            ; Used by DrawBand
     tempX:           .res  1            ; Preserve X Pos
     tempY:           .res  1            ; Preserve Y Pos
     lineChar:	       .res  1            ; Line draw char
@@ -40,7 +41,9 @@ ScratchStart:
     resultHi:		     .res  1
     shiftCountdown:  .res  1            ; We scroll color every N frames
     VU:              .res  1            ; VU Audio Data
-    Peaks:           .res  NUM_BANDS    ; Peak Data for current frame    
+    Peaks:           .res  NUM_BANDS    ; Peak Data for current frame   
+    NextStyle:       .res  1            ; The next style we will pick 
+    CharDefs:        .res  8            ; Storage for the visualDef currently in use
 ScratchEnd:
 
 .assert * <= SCRATCH_END, error         ; Make sure we haven't run off the end of the buffer
@@ -96,22 +99,27 @@ drawLoop:	      jsr InitTimer         ; Prep the timer for this frame
                 lda #$11              ; Start the timer
                 sta CRA
 
-              .if TIMING              ; If 'TIMING' is defined we turn the border 
+              .if TIMING              ; If 'TIMING' is defined we turn the border bit RASTHI
+:               bit RASTHI
+                bmi :-
                 lda #DARK_GREY        ;  color to different colors at particular
                 sta BORDER_COLOR      ;  places in the draw code to help see how
               .endif                  ;  long various parts of it are taking.
 
                 jsr FillPeaks
-              
                 jsr DrawVU            ; Draw the VU bar at the top of the screen
+
+              .if TIMING              ; If 'TIMING' is defined we turn the border 
+                lda #LIGHT_GREY        ;  color to different colors at particular
+                sta BORDER_COLOR      ;  places in the draw code to help see how
+              .endif                  ;  long various parts of it are taking.
 
 drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
 :
-           			lda Peaks, x          ; X = band numner, A = value
+                lda Peaks, x          ; X = band numner, A = value
                 jsr DrawBand
                 dex
                 bpl :-
-
                 ; Check to see its time to scroll the color memory
 
               .if FRAMESPERSHIFT > 0
@@ -123,21 +131,16 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 sta shiftCountdown
                 jsr ScrollColors
 :             .endif
-
               .if TIMING
                 lda #BLACK
-                sta BORDER_COLOR			
+                sta BORDER_COLOR		
+:               bit RASTHI
+                bpl :-
+                	
               .endif
 
-              lda #0                  ; Stop the clock
-              sta CRA
-
-              .if WAIT_FOR_RASTER
-:			        	bit RASTHI            ; Wait for the bit byte of the raster counter                      
-                bmi :-                          
-              .endif
-
-
+                lda #0                  ; Stop the clock
+                sta CRA
 
                 lda #LIGHT_BLUE
                 sta TEXT_COLOR
@@ -168,7 +171,10 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 jsr CHROUT
 
                 jsr GETIN				      ; Keyboard Handling - check for RUN            
-                cmp #$03
+                cmp #83               ; Letter "S"
+                bne nextChar
+                jsr SetNextStyle
+nextChar:       cmp #$03              
                 bne drawLoop
 
                 ldy #>exitstr         ; Output exiting text and exit
@@ -189,9 +195,12 @@ EmptyBorder:    ldy #>clrGREEN        ; Set cursor to white and clear screen
                 sta Height
                 jsr DrawSquare
                 jsr InitVU            ; Let the VU meter paint its color mem, etc
-              .if STATIC_COLOR  
+              .if STATIC_COLOR
                 jsr FillBandColors
               .endif  
+                
+                jsr SetNextStyle      ; Select the first visual style
+                
                 rts
                 
 ScrollBands:    lda Peaks+NUM_BANDS-1 ; Wrap data around from end to start
@@ -645,7 +654,7 @@ DrawHLine:		  sta tempDrawLine		  ; Start at the X/Y pos in screen mem
 
                 ldy tempDrawLine      ; Draw the line
                 dey
-				        lda lineChar          ; Store the line character in screen ram
+                lda lineChar          ; Store the line character in screen ram
 :               sta (zptmp), y
                 dey                   ; Rinse and repeat
                 bpl :-
@@ -653,7 +662,7 @@ DrawHLine:		  sta tempDrawLine		  ; Start at the X/Y pos in screen mem
               .if !STATIC_COLOR
                 ldy tempDrawLine      ; Draw the line
                 dey
-				        lda TEXT_COLOR        ; Store current color in color ram
+                lda TEXT_COLOR        ; Store current color in color ram
 :               sta (zptmpB), y
                 dey                   ; Rinse and repeat
                 bne :-
@@ -711,7 +720,7 @@ vloop:			    lda lineChar				  ; Store the line char in screen mem
                 
 :
 
-				        dec tempDrawLine			; One less line to go
+                dec tempDrawLine			; One less line to go
                 bne vloop					
                 rts
 
@@ -763,6 +772,97 @@ fcloop:         lda BandColors,x
                 rts
 .endif
 
+; DrawBand - Static version that makes assumptions:
+;               No dynamic color memory
+;               Band Width of 2
+;
+; Walks down the screen and depending on whether the current
+; pos is above, equal, or below the bar itself, draws blanks,
+;
+; the bar top, the bar middle, or bar bottom
+
+.if STATIC_COLOR
+
+DrawBand:   		cmp #2                ; Can't draw less than height 2
+                bcs :+
+                rts
+:               sta Height            ; Height is height of bar itself    
+                txa
+                asl
+                sta SquareX           ; Bar xPos on screen
+                
+                ; Square Y will be the screen line number of the top of the bar
+                
+                lda #YSIZE - BOTTOM_MARGIN
+                sec
+                sbc Height
+                sta SquareY           
+                
+                ; tempY is the current screen line 
+                
+                lda #TOP_MARGIN       
+                sta tempY             ; We start on the first screen line of the analyzer
+                
+                SCREEN_LOC = (SCREEN_MEM + XSIZE * TOP_MARGIN + LEFT_MARGIN)
+                
+                lda #<SCREEN_LOC      ; zptmp points to top left of first bar
+                sta zptmp             ;  in screen memory
+                lda #>SCREEN_LOC
+                sta zptmp+1                
+                
+lineSwitch:     ldy SquareX           ; Y will be the X-pos (zp addr mode not supported on X register)
+                lda tempY             ; Current screen line     
+                cmp #YSIZE - BOTTOM_MARGIN - 1
+                beq drawLastLine
+                cmp SquareY           ; Compare to screen line of top of bar
+                bcc drawBlanks
+                beq drawFirstLine
+                bcs drawMiddleLine
+drawBlanks:     
+                lda #' '
+                sta (zptmp),y
+                iny
+                sta (zptmp),y
+                inc tempY
+                bne lineLoop
+drawFirstLine:  
+                lda CharDefs + visualDef::TOPLEFTSYMBOL
+                sta (zptmp),y
+                iny
+                lda CharDefs + visualDef::TOPRIGHTSYMBOL
+                sta (zptmp),y
+                inc tempY
+                bne lineLoop
+drawMiddleLine: 
+                lda CharDefs + visualDef::VLINE1SYMBOL
+                sta (zptmp),y
+                iny
+                lda CharDefs + visualDef::VLINE2SYMBOL
+                sta (zptmp),y
+                inc tempY
+                cpy #YSIZE-BOTTOM_MARGIN-1
+                bne lineLoop
+drawLastLine:   
+                ldy SquareX
+                lda CharDefs + visualDef::BOTTOMLEFTSYMBOL   ; using the previous lines zptmp but add one
+                sta (zptmp),y         ; line to the Y register.
+                iny
+                lda CharDefs + visualDef::BOTTOMRIGHTSYMBOL
+                sta (zptmp),y    
+                rts
+                
+lineLoop:       lda zptmp             ; Advance zptmp by one screen line down
+                clc
+                adc #XSIZE
+                sta zptmp
+                lda zptmp+1
+                adc #0
+                sta zptmp+1
+                jmp lineSwitch
+.else
+
+; Drawband - Original version which supports color memory 
+
 DrawBand:		    sta Height
 
                 lda BandColors, x     ; Draw this band in the color specified for this bar
@@ -799,6 +899,7 @@ DrawBand:		    sta Height
                 pla
                 tax
                 rts
+.endif
 
 ;-----------------------------------------------------------------------------------
 ; ScrollColors
@@ -851,6 +952,37 @@ InitTimer:
                 sty   CRB             ; Enable and go
                 rts
 
+;-----------------------------------------------------------------------------------
+; NextStyle - Select a visual style for the spectrum analyzer by copying a small
+;             character table of PETSCII screen codes into our 'styletable' that
+;             we use to draw the spectrum analyzer bars.  It defines the PETSCII
+;             chars that we use to draw the corners and lines.
+;-----------------------------------------------------------------------------------
+; Copy the next style into the style table and increment the style table pointer
+; with wraparound so that we can pick the next style next time in
+;-----------------------------------------------------------------------------------
+    
+SetNextStyle:   lda NextStyle         ; Take the style index and multiply by 2
+                tax                   ;   to get the Y index into the lookup table                                      
+                asl                   ;   so we can fetch the actual address of the 
+                tay                   ;   char table.  Because it is a mult of 8 in 
+                inx                   ;   size we could do without a lookup, but why assume...
+                txa                   ; Increment the NextStyle index and do a MOD 4 on it
+                and #3                ;   and then put it back so that the index cycles 0-3
+                sta NextStyle
+                
+                lda StyleTable, y     ; Get the entry in the styletable, which is stored as
+                sta zptmp             ;   a list of word addresses, and put that address
+                iny                   ;   into zptmp as the 'source' of our memcpy
+                lda StyleTable, y
+                sta zptmp+1                
+                ldy #.sizeof(visualDef) - 1  ; Y is the size we're going to copy (the size of the struct)
+:               lda (zptmp),y         ; Copy from source to dest
+                sta CharDefs, y
+                dey
+                bpl :-                
+                rts
+                                
 ; String literals at the end of file, as was the style at the time!
 
 .include "fakedata.inc"
@@ -860,4 +992,28 @@ exitstr:        .literal "EXITING...", 13, 0
 framestr:       .literal "  RENDER TIME: ", 0
 clrGREEN:		    .literal $99, $93, 0
 
+; Visual style definitions.  See the 'visualDef' structure defn in petrock.inc
+; Each of these small tables includes the characters needed to draw the corners,
+; and horizontal and vertical lines needed to form a box.
 
+SkinnyRoundStyle:                     ; PETSCII screen codes for round tube bar style
+  .byte 85, 73, 74, 75, 66, 66, 74, 75
+
+DrawSquareStyle:                      ; PETSCII screen codes for square linedraw style
+  .byte 79, 80, 76, 122, 101, 103, 76, 122  
+
+BreakoutStyle:                        ; PETSCII screen codes for style that looks like breakout
+  .byte 239, 250, 239, 250, 239, 250, 239, 250
+
+CheckerboardStyle:                    ; PETSCII screen codes for checkerboard style
+  .byte 102, 92, 102, 92, 102, 92,102, 92  
+
+; Lookup table - each of the above mini tables is listed in this lookup table so that
+;                we can easily find items 0-3 
+;
+; The code currently assumes that there are four entries such that is can easily
+; modulus the values.  These are the four entries.
+  
+StyleTable:
+  .word SkinnyRoundStyle, BreakoutStyle, CheckerboardStyle, DrawSquareStyle
+  
