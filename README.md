@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/PlummersSoftwareLLC/PETRock/actions/workflows/CI.yml/badge.svg)](https://github.com/PlummersSoftwareLLC/PETRock/actions/workflows/CI.yml)
 
-A spectrum analyzer display for the PET and C64 that receives its data from an ESP32 MCU on the user port that does the audio processing, FFT, etc.
+A spectrum analyzer display for the C64 that receives its data from an ESP32 MCU on the user port that does the audio processing, FFT, etc.
 
 ## Configuring and building
 
@@ -11,23 +11,21 @@ Towards the top of the [`petrock.asm`](petrock.asm) file, a number of symbols ca
 |-|-|-|-|
 |DEBUG|0 or 1|Yes|Set to 1 to enable code that only is included for debug builds.|
 
-This repository's code targets the ca65 assembler and cl65 linker that are part of the [cc65](https://cc65.github.io/) GitHub project. You will need a fairly recent build of cc65 for assembly of this repository's contents to work.  If you receive errors about the .literal mnemonic, this is the likely reason.
+This repository's code targets the ca65 assembler and cl65 linker that are part of the [cc65](https://cc65.github.io/) GitHub project. You will need a fairly recent build of cc65 for assembly of this repository's contents to work. If you receive errors about the .literal mnemonic, this is the likely reason.
 
-With the cc65 toolkit installed and in your PATH, you can build the application using one of the following commands:
+With the cc65 toolkit installed and in your PATH, you can build the application using the following command:
 
-* For the C64:
-
-  ```text
-  cl65 --verbose  --asm-include-dir include --asm-define C64=1 -o c64rock.prg -t none petrock.asm
-  ```
+```text
+cl65 --verbose -o petrock.prg -t none petrock.asm
+```
 
 ## Loading and running
 
-Assuming the petrock.prg or c64rock.prg file is on a disk in device 8, the spectrum analyzer display can be loaded using the following command:
+Assuming the petrock.prg file is on a disk in device 8, the spectrum analyzer display can be loaded using the following command:
 
 
 ```text
-LOAD "C64ROCK.PRG",8
+LOAD "PETROCK.PRG",8
 ```
 
 ## 6502 assembly
