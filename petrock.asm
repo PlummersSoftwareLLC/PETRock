@@ -472,7 +472,7 @@ addrloop:       lda lineChar
 :               dec tempFillSquare
                 bpl addrloop
 
-                place                 ; Restore X
+                pla                   ; Restore X
                 tax
                 pla                   ; Restore Y
                 tay
