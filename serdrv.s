@@ -75,11 +75,11 @@ full03:         .word $0d52     ; 3410    register indexing
 
 ; Control Registers
 ; 
-; 300  - $06  
-; 1200 - $08  822 
-; 2400 - $0A  410
+; 300  - $06  3284 0xCD4   C & 6 =4 
+; 1200 - $08  822  0x336   
+; 2400 - $0A  410  0x19a
         
-baudrate        = 6           
+baudrate        = 10           
 databits        = 0             
 stopbit         = 0                  
 
@@ -108,13 +108,7 @@ OpenSerial:
         jsr SETLFS
         jsr OPEN
         
-        ldx BAUDOF
-        lda BAUDOF+1
-        jsr BASIC_INTOUT
-        rts
-        
         jsr ser_setup
-
         rts
 
 ;-----------------------------------------------------------------------------------
