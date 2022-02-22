@@ -1,76 +1,100 @@
+;-----------------------------------------------------------------------------------
+; Spectrum Analyzer Display for C64
+;-----------------------------------------------------------------------------------
+; (c) Plummer's Software Ltd, 02/11/2022 Initial commit
+;         David Plummer
+;         Rutger van Bergen
+;-----------------------------------------------------------------------------------
 ; Serial driver for the C64 using Userport.
 ;
 ; Johan Van den Brande, (c) 2014
 ; 
-; Based on George Hug's 'Towards 2400' article in the Transactor Magazine volume 9 issue 3.
+; Based on George Hug's 'Towards 2400' article in the Transactor Magazine Vol 9 #3.
 ; (https://archive.org/details/transactor-magazines-v9-i03) 
 ;
 ; Modified by Rutger van Bergen for use with the Spectrum Analyzer Display for C64
-;
+;-----------------------------------------------------------------------------------
 
-; ------------------------------------------------------------------------
+;-----------------------------------------------------------------------------------
 ; Constants
+;-----------------------------------------------------------------------------------
+
 RS232_DEV = 2
 
-; ------------------------------------------------------------------------
+;-----------------------------------------------------------------------------------
 ; Zeropage addresses not defined by C64.inc
-XSAV = $97
-DFLTN = $99
-DFLTO = $9a
-PTR1 = $9e
-PTR2 = $9f
-BITCI = $a8
-RIDATA = $aa
-BITTS = $b4
-NXTBIT = $b5
-RODATA = $b6
-RIBUF = $f7
-ROBUF = $f9
+;-----------------------------------------------------------------------------------
 
-; ------------------------------------------------------------------------
+XSAV            = $97
+DFLTN           = $99
+DFLTO           = $9a
+PTR1            = $9e
+PTR2            = $9f
+BITCI           = $a8
+RIDATA          = $aa
+BITTS           = $b4
+NXTBIT          = $b5
+RODATA          = $b6
+RIBUF           = $f7
+ROBUF           = $f9
+
+;-----------------------------------------------------------------------------------
 ; I/O space addresses
-BAUDOF = $0299
-RIDBE = $029b
-RIDBS = $029c
-RODBS = $029d
-RODBE = $029e
-ENABL = $02a1
+;-----------------------------------------------------------------------------------
 
-; ------------------------------------------------------------------------
+BAUDOF          = $0299
+RIDBE           = $029b
+RIDBS           = $029c
+RODBS           = $029d
+RODBE           = $029e
+ENABL           = $02a1
+
+;-----------------------------------------------------------------------------------
 ; Kernal ROM addresses
-RSTKEY = $fe56
-RETURN = $febc
-OLDOUT = $f1ca
-OLDCHK = $f21b
-FINDFN = $f30f
-SETDEV = $f31f
-NOFILE = $f701
+;-----------------------------------------------------------------------------------
 
-; ------------------------------------------------------------------------
+RSTKEY          = $fe56 
+RETURN          = $febc 
+OLDOUT          = $f1ca
+OLDCHK          = $f21b
+FINDFN          = $f30f
+SETDEV          = $f31f
+NOFILE          = $f701
+
+;-----------------------------------------------------------------------------------
 ; Read-only words used by code/kernal API routines
-strt24:  .word $01cb     ; 459   start bit times
-strt12:  .word $0442     ; 1090    not referenced directly, but through Y       
-strt03:  .word $1333     ; 4915    register indexing
-full24:  .word $01a5     ; 421   full bit times
-full12:  .word $034d     ; 845     not referenced directly, but through Y
-full03:  .word $0d52     ; 3410    register indexing
+;-----------------------------------------------------------------------------------
 
-baudrate = 10
-databits = 0
-stopbit = 0
+strt24:         .word $01cb     ; 459   start bit times
+strt12:         .word $0442     ; 1090    not referenced directly, but through Y       
+strt03:         .word $1333     ; 4915    register indexing
 
-wire = 1
-duplex = 0
-parity = 0
+full24:         .word $01a5     ; 421   full bit times
+full12:         .word $034d     ; 845     not referenced directly, but through Y
+full03:         .word $0d52     ; 3410    register indexing
+
+; Control Registers
+; 
+; 300  - $06  
+; 1200 - $08  822 
+; 2400 - $0A  410
+        
+baudrate        = 6           
+databits        = 0             
+stopbit         = 0                  
+
+wire            = 1
+duplex          = 0
+parity          = 0
 
 serial_config:
   .byte baudrate + databits + stopbit
   .byte wire + duplex + parity
 
 
-;----------------------------------------------------------------------------
+;-----------------------------------------------------------------------------------
 ; OpenSerial: Setup the code to handle RS232 I/O
-;
+;-----------------------------------------------------------------------------------
 
 OpenSerial:
         lda #RS232_DEV
@@ -83,15 +107,21 @@ OpenSerial:
         tay
         jsr SETLFS
         jsr OPEN
-
+        
+        ldx BAUDOF
+        lda BAUDOF+1
+        jsr BASIC_INTOUT
+        rts
+        
         jsr ser_setup
 
         rts
 
-;----------------------------------------------------------------------------
+;-----------------------------------------------------------------------------------
 ; GetSerialChar: Will fetch a character from the receive buffer and store it into A.
 ; If no data is available, SER_ERR_NO_DATA is returned in X/Y.
-;
+;-----------------------------------------------------------------------------------
+
 
 GetSerialChar:   
         ldx #RS232_DEV
@@ -107,15 +137,16 @@ GetSerialChar:
         rts
 
 @nodata:
+        jsr CLRCH 
         lda #$ff
         ldx #<SER_ERR_NO_DATA
         ldy #>SER_ERR_NO_DATA 
         rts
 
-;----------------------------------------------------------------------------
+;-----------------------------------------------------------------------------------
 ; GetBufferChar: This is a minimised call to get the character from the buffer.
 ; The Kernal code does not allow zero bytes (0x00)... this does.
-;
+;-----------------------------------------------------------------------------------
  
 GetBufferChar:
         jsr $F14E
@@ -125,9 +156,9 @@ GetBufferChar:
         clc
         rts
 
-;----------------------------------------------------------------------------
+;-----------------------------------------------------------------------------------
 ; PutSerialChar: Output character in A.
-;
+;-----------------------------------------------------------------------------------
 
 PutSerialChar:
         pha
@@ -139,9 +170,9 @@ PutSerialChar:
         rts
 
 
-;----------------------------------------------------------------------------
+;-----------------------------------------------------------------------------------
 ; SerialIoctl: Pass 0 in A to disable serial, 2 to enable
-;
+;-----------------------------------------------------------------------------------
 
 SerialIoctl:
       cmp #0
@@ -155,17 +186,18 @@ SerialIoctl:
 @exit:
       rts
 
+;-----------------------------------------------------------------------------------
 
-;--------------------------------------
 ser_setup:
-        ; set things up for 1200 bps
-        lda strt12
+        ; set things up for 2400 bps
+        
+        lda strt24
         sta ser_strtlo
-        lda strt12+1
+        lda strt24+1
         sta ser_strthi
-        lda full12
+        lda full24
         sta ser_fulllo
-        lda full12+1
+        lda full24+1
         sta ser_fullhi
 
         lda #<ser_nmi64
@@ -181,14 +213,16 @@ ser_setup:
         sta $0326
         sty $0327
         rts
-;--------------------------------------
+        
+;-----------------------------------------------------------------------------------
+
 ser_nmi64:
         pha             ; new nmi handler
         txa
         pha
         tya
         pha
-
+        inc     $d021
         cld
         ldx CIA2_TB+1   ; sample timer b hi byte
         lda #$7f        ; disable cia nmi's
@@ -333,10 +367,12 @@ ser_strtup:
         lda (ROBUF),y
         sta RODATA      ;   and next byte
         inc RODBS
+        
         lda BAUDOF      ; full tx bit time to ta
         sta CIA2_TA
         lda BAUDOF+1
         sta CIA2_TA+1
+        
         lda #$11        ; start timer a
         sta CIA2_CRA
         lda #$81        ; enable ta nmi
@@ -375,10 +411,16 @@ ser_enable:
         sta PTR1         ; enable rs232 input
         sty XSAV
 ;baud:
+        ; BAUD          BAUDOF+1   (BAUDOF+1) & #6
+        ; 2400 == $960     9          9 & 6
+        ; 1200 == $4B0     4          4 & 6
+        ; 300  == $12C     1          1 & 6 
+        
         lda BAUDOF+1    ; set receive to same
         and #$06        ;   baud rate as xmit
-        tay
+        tay     
         lda strt24,y
+        
         sta ser_strtlo  ; overwrite values in nmi handler
         lda strt24+1,y
         sta ser_strthi
@@ -386,6 +428,7 @@ ser_enable:
         sta ser_fulllo
         lda full24+1,y
         sta ser_fullhi
+        
         lda ENABL
         and #$12        ; *flag or tb on?
         bne ser_ret1    ; yes

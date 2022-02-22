@@ -32,6 +32,12 @@ RASTLO              = $D012  ; Loword of screen raster
     
 COLOR_MEM           = $d800   ; Screen color memory of 1000 bytes
 
+; Serial magic bytes
+
+MAGIC_LEN = 8                   ; Size of full packet
+MAGIC_BYTE_0        = 'D'
+MAGIC_BYTE_1        = 'P'
+
 ; Clock related items
 
 TALO                = $DD04
