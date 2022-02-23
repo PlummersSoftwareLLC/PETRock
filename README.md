@@ -23,7 +23,6 @@ cl65 --verbose -o petrock.prg -t none petrock.asm
 
 Assuming the petrock.prg file is on a disk in device 8, the spectrum analyzer display can be loaded using the following command:
 
-
 ```text
 LOAD "PETROCK.PRG",8
 ```

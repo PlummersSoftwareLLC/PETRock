@@ -201,7 +201,12 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 jsr SetNextScheme
                 jmp drawLoop
 
-@notC:
+@notC:          cmp #195              ; Shift "C"
+                bne @notShiftC
+                jsr SetPrevScheme
+                jmp drawLoop
+
+@notShiftC:
 .endif
                 cmp #$03
                 bne drawLoop
@@ -764,28 +769,63 @@ vloop:          lda lineChar          ; Store the line char in screen mem
 
 .if STATIC_COLOR
 
+
+;-----------------------------------------------------------------------------------
+; SetPrevScheme - Switch to previous color scheme
+;-----------------------------------------------------------------------------------
+
+SetPrevScheme:
+                dec CurSchemeIndex
+                bpl FillBandColors    ; If index >= 0, we're done
+
+                lda #<BandSchemeTable ; Base address for color scheme table
+                sta zptmpB
+                lda #>BandSchemeTable
+                sta zptmpB+1
+                
+                ldy #0                ; Start at first scheme table entry
+
+@loop:          iny                   ; Move on to next table entry
+                iny               
+                
+                lda (zptmpB),y        ; Check if we hit the null pointer
+                iny
+                ora (zptmpB),y
+
+                bne @loop             ; No? Continue looking
+
+                dey                   ; Back up one table entry
+                dey
+                tya
+                clc
+                lsr                   ; Divide index by two and store
+                sta CurSchemeIndex
+
+                bcs FcColorMem        ; Branch always (lsr shifted bit into carry)
+
+
 ;-----------------------------------------------------------------------------------
 ; SetNextScheme - Switch to next color scheme
 ;-----------------------------------------------------------------------------------
 
 SetNextScheme:
                 lda #<BandSchemeTable ; Base address for color scheme table
-                sta zptmp
+                sta zptmpB
                 lda #>BandSchemeTable
-                sta zptmp+1
+                sta zptmpB+1
 
                 inc CurSchemeIndex    ; Bump up color scheme index
                 lda CurSchemeIndex
                 asl
                 tay
 
-                lda (zptmp),y
+                lda (zptmpB),y
                 iny
-                ora (zptmp),y
-                bne FillBandColors
+                ora (zptmpB),y
+                bne FcColorMem
                 sta CurSchemeIndex    ; Zero pointer = end of table, so start over
+                beq FcColorMem
 
-; Note: routine execution flows into the next one!
 
 ;-----------------------------------------------------------------------------------
 ; FillBandColors - Color bands using the current band color scheme
@@ -797,7 +837,12 @@ SetNextScheme:
 ;-----------------------------------------------------------------------------------
 
 FillBandColors:
-                lda #YSIZE-TOP_MARGIN-BOTTOM_MARGIN   ; Count of rows to paint color for
+                lda #<BandSchemeTable ; Base address for color scheme table
+                sta zptmpB
+                lda #>BandSchemeTable
+                sta zptmpB+1
+
+FcColorMem:     lda #YSIZE-TOP_MARGIN-BOTTOM_MARGIN   ; Count of rows to paint color for
                 sta tempY
 
                 BAND_COLOR_LOC = COLOR_MEM + XSIZE * TOP_MARGIN + LEFT_MARGIN
@@ -808,12 +853,7 @@ FillBandColors:
                 sta zptmp+1
 
                 ; The following is the assembly version of:
-                ;   colorCount = *(((byte**)BandSchemeTable)[CurSchemeIndex])
-
-                lda #<BandSchemeTable ; Base address for color scheme table
-                sta zptmpB
-                lda #>BandSchemeTable
-                sta zptmpB+1
+                ;   colorCount = (byte**)BandSchemeTable[CurSchemeIndex][0]
 
                 lda CurSchemeIndex    ; Load color scheme address from table...
                 asl
