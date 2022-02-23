@@ -25,7 +25,7 @@ Assuming the petrock.prg file is on a disk in device 8, the spectrum analyzer di
 
 
 ```text
-LOAD "PETROCK.PRG",8
+LOAD "C64ROCK.PRG",8
 ```
 
 ## 6502 assembly
