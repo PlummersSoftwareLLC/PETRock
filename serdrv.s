@@ -66,24 +66,24 @@ NOFILE          = $f701
 ;-----------------------------------------------------------------------------------
 
 strt24:         .word $01cb     ; 459   start bit times
-strt12:         .word $0442     ; 1090    not referenced directly, but through Y       
-strt03:         .word $1333     ; 4915    register indexing
+;strt12:         .word $0442     ; 1090    not referenced directly, but through Y       
+;strt03:         .word $1333     ; 4915    register indexing
 
 full24:         .word $01a5     ; 421   full bit times
-full12:         .word $034d     ; 845     not referenced directly, but through Y
-full03:         .word $0d52     ; 3410    register indexing
+;full12:         .word $034d     ; 845     not referenced directly, but through Y
+;full03:         .word $0d52     ; 3410    register indexing
 
 ; Control Registers
 ; 
-; 300  - $06  3284 0xCD4   C & 6 =4 
+; 300  - $06  3284 0xCD4   
 ; 1200 - $08  822  0x336   
 ; 2400 - $0A  410  0x19a
         
-baudrate        = 10           
+baudrate        = 10           ; chr$(10) == $0A == 2400 baud
 databits        = 0             
 stopbit         = 0                  
 
-wire            = 1
+wire            = 0
 duplex          = 0
 parity          = 0
 
@@ -109,6 +109,7 @@ OpenSerial:
         jsr OPEN
         
         jsr ser_setup
+
         rts
 
 ;-----------------------------------------------------------------------------------
@@ -216,7 +217,6 @@ ser_nmi64:
         pha
         tya
         pha
-        inc     $d021
         cld
         ldx CIA2_TB+1   ; sample timer b hi byte
         lda #$7f        ; disable cia nmi's
@@ -241,7 +241,8 @@ ser_nmi64:
         txa
         and #$10        ; *flag nmi (bit 4)
         beq @nmion      ; no
-        lda ser_strtlo  ; yes, start-bit to tb
+
+        lda ser_strtlo  ; yes, start-bit to tb                  ; STARTBIT
         sta CIA2_TB
         lda ser_strthi
         sta CIA2_TB+1
@@ -371,15 +372,15 @@ ser_strtup:
         sta CIA2_CRA
         lda #$81        ; enable ta nmi
 ser_change:
-        sta CIA2_CRB    ; nmi clears flag if set
+        sta CIA2_ICR    ; nmi clears flag if set
         php             ; save irq status
         sei             ; disable irq's
         ldy #$7f        ; disable nmi's
-        sty CIA2_CRB    ; twice
-        sty CIA2_CRB
+        sty CIA2_ICR    ; twice
+        sty CIA2_ICR
         ora ENABL       ; update mask
         sta ENABL
-        sta CIA2_CRB    ; enable new config
+        sta CIA2_ICR    ; enable new config
         plp             ; restore irq status
 ser_ret3:
         clc
@@ -410,11 +411,16 @@ ser_enable:
         ; 1200 == $4B0     4          4 & 6
         ; 300  == $12C     1          1 & 6 
         
-        lda BAUDOF+1    ; set receive to same
-        and #$06        ;   baud rate as xmit
-        tay     
-        lda strt24,y
+        ; BUGBUG if easy and possible let this work as it used to, even though
+        ; I have NFI what it's supposed to be doing.  Let bigger heads prevail.
+        ;
+        ; lda BAUDOF+1    ; set receive to same
+        ; and #$06        ;   baud rate as xmit
+        ; tay     
+        ; lda strt24,y
         
+        ldy #BAUD2400   ; We could allow selection by Y reg here but we only ever need 2400
+        lda strt24,y    ;   so I've coded it to 2400 exclusively for this project
         sta ser_strtlo  ; overwrite values in nmi handler
         lda strt24+1,y
         sta ser_strthi

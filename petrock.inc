@@ -25,7 +25,6 @@ SCRATCH_END         = $03FB   ; End of cassette buffer
 SCREEN_MEM          = $0400   ; Screen buffer of 1000 bytes
     
 SCREEN_COLOR        = VIC_BG_COLOR0
-BORDER_COLOR        = VIC_BORDERCOLOR 
     
 RASTHI              = $D011  ; Hiword of screen raster   
 RASTLO              = $D012  ; Loword of screen raster
@@ -35,8 +34,8 @@ COLOR_MEM           = $d800   ; Screen color memory of 1000 bytes
 ; Serial magic bytes
 
 MAGIC_LEN = 8                   ; Size of full packet
-MAGIC_BYTE_0        = 'D'
-MAGIC_BYTE_1        = 'P'
+MAGIC_BYTE_0        = 68        ; ASCII 'D'       
+MAGIC_BYTE_1        = 80        ; ASCII 'P'
 
 ; Clock related items
 
@@ -72,6 +71,9 @@ LIGHT_GREEN         = 13
 LIGHT_BLUE          = 14
 LIGHT_GREY          = 15
 
+BAUD300             = 4
+BAUD1200            = 2
+BAUD2400            = 0
 ; Includes --------------------------------------------------------------------------
 
     .include        "cbm_kernal.inc"
@@ -90,12 +92,6 @@ CLRHOME             = $93               ; Clear screen
 
 NUM_BANDS           = 16                ; 16 bands in the spectrum data
 MAX_VU              = 17                ; Maximum size per side of the VU meter
-STATIC_COLOR        = 1                 ; Pre-paint the band color and never change it
-
-FRAMESPERSHIFT      = 0                 ; We scroll color every this many frames
-                                        ;  or not at all if set to zero
-
-.assert !(STATIC_COLOR && FRAMESPERSHIFT), error, "STATIC_COLOR cannot be used with nonzero FRAMESPERSHIFT"
 
 ; Center the VU meter on the second screen line
 
@@ -137,8 +133,8 @@ LEFT_MARGIN         = 4
 RIGHT_MARGIN        = LEFT_MARGIN
 BAND_WIDTH          = 2
 TOP_MARGIN          = 3
-BOTTOM_MARGIN       = 2
-BAND_HEIGHT         = 20
+BOTTOM_MARGIN       = 4
+BAND_HEIGHT         = YSIZE-TOP_MARGIN-BOTTOM_MARGIN
 
 
 ;----------------------------------------------------------------------------
