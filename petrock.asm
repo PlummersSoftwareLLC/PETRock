@@ -1,5 +1,5 @@
 ;-----------------------------------------------------------------------------------
-; Spectrum Analyzer Display for C64
+; PETROCK: Spectrum Analyzer Display for C64
 ;-----------------------------------------------------------------------------------
 ; (c) Plummer's Software Ltd, 02/11/2022 Initial commit
 ;         David Plummer
@@ -101,7 +101,7 @@ realStart:      cld                   ; Turn off decimal mode
 
                 lda #BLACK            ; Screen and border to black
                 sta SCREEN_COLOR
-                sta BORDER_COLOR
+                sta VIC_BORDERCOLOR
 
                 jsr EmptyBorder       ; Draw the screen frame and decorations
 
@@ -125,7 +125,7 @@ drawLoop:
 @waitforraster: bit RASTHI
                 bmi @waitforraster
                 lda #DARK_GREY        ;  color to different colors at particular
-                sta BORDER_COLOR      ;  places in the draw code to help see how
+                sta VIC_BORDERCOLOR   ;  places in the draw code to help see how
               .endif                  ;  long various parts of it are taking.
 
                 ;jsr FillPeaks
@@ -133,7 +133,7 @@ drawLoop:
 
               .if TIMING              ; If 'TIMING' is defined we turn the border
                 lda #LIGHT_GREY       ;  color to different colors at particular
-                sta BORDER_COLOR      ;  places in the draw code to help see how
+                sta VIC_BORDERCOLOR   ;  places in the draw code to help see how
               .endif                  ;  long various parts of it are taking.
 
 drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
@@ -144,19 +144,9 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 bpl :-
                 ; Check to see its time to scroll the color memory
 
-              .if FRAMESPERSHIFT > 0
-                inc shiftCountdown    ; Every N frames we scroll the color bars
-                lda shiftCountdown
-                cmp #FRAMESPERSHIFT
-                bcc :+
-                lda #0
-                sta shiftCountdown
-                jsr ScrollColors
-:             .endif
-
               .if TIMING
                 lda #BLACK
-                sta BORDER_COLOR
+                sta VIC_BORDERCOLOR
 :               bit RASTHI
                 bpl :-
                 lda #0                ; Stop the clock
@@ -216,7 +206,7 @@ EmptyBorder:    ldy #>clrGREEN        ; Set cursor to white and clear screen
                 lda #LIGHT_BLUE
                 sta TEXT_COLOR
 
-                ldy #XSIZE/2-titlelen/2         ; Print title banner
+                ldy #XSIZE/2-titlelen/2+1         ; Print title banner
                 ldx #YSIZE-1
                 clc
                 jsr PlotEx
@@ -224,31 +214,19 @@ EmptyBorder:    ldy #>clrGREEN        ; Set cursor to white and clear screen
                 lda #<titlestr
                 jsr WriteLine
 
-
-              .if STATIC_COLOR
                 jsr FillBandColors
-              .endif
 
                 jsr SetNextStyle      ; Select the first visual style
 
                 rts
 
-ScrollBands:    lda Peaks+NUM_BANDS-1 ; Wrap data around from end to start
-                pha
-                lda #NUM_BANDS - 1    ; Draw each of the bands in reverse order
-                tax
-:               lda Peaks, x          ; Scroll the others in place
-                sta Peaks+1, x
-                dex
-                bpl :-
-                pla
-                sta Peaks
 
 ;-----------------------------------------------------------------------------------
 ; GotSerial - Process incoming serial bytes from the ESP32 
 ;-----------------------------------------------------------------------------------
 ; Copy data from the current index of the fake data table to the current peak data
-; and vu value
+; and vu value.  A zero is a nul terminator and ends the signal, which is then tested
+; to see if its a real packet or not.
 ;-----------------------------------------------------------------------------------
 
 GotSerial:      ldy SerialBufPos
@@ -260,13 +238,11 @@ GotSerial:      ldy SerialBufPos
                 sta SerialBuf, y
                 iny
                 sty SerialBufPos
-                
+
                 cmp #00                   ; Look for carriage return meaning end
                 beq :+
                 rts                       ; No CR, back to caller
 
-:               cpy SerialBufPos          ; Are we in the right char pos for it?
-                bne :+                    ;  Nope - Ignore this NUL
                 jsr GotSerialPacket
 :
                 rts
@@ -283,11 +259,11 @@ BogusData:
 GotSerialPacket: 
                 ldy SerialBufPos          ; Get received packet length
                 lda SerialBuf             ; Look for 'D'
-                cmp #68
+                cmp #MAGIC_BYTE_0
                 bne BogusData
 
                 lda SerialBuf+1           ; Look for 'P'
-                cmp #80
+                cmp #MAGIC_BYTE_1
                 bne BogusData
 
                 lda SerialBuf + 2
@@ -706,17 +682,6 @@ OutputSymbolXY: sta tempOutput
                 lda tempOutput
                 sta (zptmp),y
 
-              .if !STATIC_COLOR
-                lda zptmp
-                clc
-                adc #<(COLOR_MEM - SCREEN_MEM)
-                sta zptmp
-                lda zptmp+1
-                adc #>(COLOR_MEM - SCREEN_MEM)
-                sta zptmp+1
-                lda TEXT_COLOR
-                sta (zptmp),y
-              .endif
                 ldx tempX
                 ldy tempY
                 rts
@@ -748,32 +713,12 @@ DrawHLine:      sta tempDrawLine      ; Start at the X/Y pos in screen mem
                 stx zptmp
                 sty zptmp+1
 
-              .if !STATIC_COLOR
-                txa                              ; Add the distance to color memory to
-                clc                              ; the zptmp pointer and store it in
-                adc #<(COLOR_MEM - SCREEN_MEM)   ; zptmpB so that it in turn points at
-                sta zptmpB                       ; the right place in color ram
-                tya
-                clc
-                adc #>(COLOR_MEM - SCREEN_MEM)
-                sta zptmpB+1
-              .endif
-
                 ldy tempDrawLine      ; Draw the line
                 dey
                 lda lineChar          ; Store the line character in screen ram
 :               sta (zptmp), y
                 dey                   ; Rinse and repeat
                 bpl :-
-
-              .if !STATIC_COLOR
-                ldy tempDrawLine      ; Draw the line
-                dey
-                lda TEXT_COLOR        ; Store current color in color ram
-:               sta (zptmpB), y
-                dey                   ; Rinse and repeat
-                bne :-
-              .endif
 
                 pla                   ; Restore X, Y
                 tax
@@ -790,33 +735,10 @@ DrawVLine:      sta tempDrawLine      ; Start at the X/Y pos in screen mem
                 stx zptmp             ;   line's X/Y start position
                 sty zptmp+1
 
-              .if !STATIC_COLOR
-                txa                   ; Take the screen memory pointer and add
-                clc                   ;   the distance to color memory to it,
-                adc #<(COLOR_MEM - SCREEN_MEM)    ;   so zptmpB points at the right area of
-                sta zptmpB                        ;   color memory.
-                tya
-                clc
-                adc #>(COLOR_MEM - SCREEN_MEM)
-                sta zptmpB+1
-              .endif
-
 vloop:          lda lineChar          ; Store the line char in screen mem
 
                 ldy #0
                 sta (zptmp), y
-
-              .if !STATIC_COLOR
-                lda TEXT_COLOR
-                sta (zptmpB), y
-                lda zptmpB
-                clc
-                adc #XSIZE
-                sta zptmpB
-                bcc :+
-                inc zptmpB+1
-:
-              .endif
 
                 lda zptmp             ; Now add 40/80 to the lsb of ptr
                 clc
@@ -843,7 +765,7 @@ BandColors:     .byte RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE,  RED
                 BandColorSize = * - BandColors
                 .assert(BandColorSize >= (XSIZE - LEFT_MARGIN - RIGHT_MARGIN) / BAND_WIDTH), error
 
-.if STATIC_COLOR
+
 FillBandColors: lda #YSIZE-TOP_MARGIN-BOTTOM_MARGIN   ; Count of rows to paint color for
                 sta tempY
                 BAND_COLOR_LOC = COLOR_MEM + XSIZE * TOP_MARGIN + LEFT_MARGIN
@@ -877,7 +799,6 @@ fcloop:         lda BandColors,x
                 bne fcrow
 
                 rts
-.endif
 
 ; DrawBand - Static version that makes assumptions:
 ;               No dynamic color memory
@@ -887,8 +808,6 @@ fcloop:         lda BandColors,x
 ; pos is above, equal, or below the bar itself, draws blanks,
 ;
 ; the bar top, the bar middle, or bar bottom
-
-.if STATIC_COLOR
 
 DrawBand:       cmp #2                ; Can't draw less than height 2
                 bcs :+
@@ -966,68 +885,6 @@ lineLoop:       lda zptmp             ; Advance zptmp by one screen line down
                 adc #0
                 sta zptmp+1
                 jmp lineSwitch
-.else
-
-; Drawband - Original version which supports color memory
-
-DrawBand:       sta Height
-
-                lda BandColors, x     ; Draw this band in the color specified for this bar
-                sta TEXT_COLOR
-
-                txa                   ; X pos will be column number times BAND_WIDTH plus margin
-                pha
-                asl                   ; Multiplty column number by 2 or 4
-                clc
-                adc #LEFT_MARGIN      ; Add that to the left margin, and it's the left edge
-                sta SquareX
-
-                lda #BAND_WIDTH       ; All bands are this wide.  Looks cool to overlap by up to 1.
-                sta Width
-
-                lda #TOP_MARGIN       ; Everything starts at the top margin
-                sta SquareY
-
-                lda #BAND_HEIGHT - 1
-                sec
-                sbc Height
-                sta ClearHeight       ; We clear the whole bar area
-                lda #' '              ; Clear the top, empty portion of the bar
-                sta lineChar
-                jsr FillSquare
-
-                lda #(BAND_HEIGHT + TOP_MARGIN)
-              .if BAND_WIDTH <= 2
-                sec                   ; doesn't work on bands > 2 wide, where they have stuff
-                sbc Height            ; in the middle that might need to be erased
-              .endif
-                sta SquareY
-                jsr DrawSquare
-                pla
-                tax
-                rts
-.endif
-
-;-----------------------------------------------------------------------------------
-; ScrollColors
-;-----------------------------------------------------------------------------------
-; Circular buffer copy of the color table
-;-----------------------------------------------------------------------------------
-
-ScrollColors:   lda BandColors+BandColorSize-1  ; Save a copy of the last table entry
-                pha
-
-                ldx #BandColorSize-2  ; Shift all the elements forward
-:               lda BandColors, x
-                sta BandColors+1, x
-                dex
-                bpl :-
-
-                pla                   ; Put the old last as the new first
-                sta BandColors
-
-                rts
-
 
 ;-----------------------------------------------------------------------------------
 ; PlotEx        Replacement for KERNAL plot that fixes color ram update bug
@@ -1042,7 +899,9 @@ PlotEx:
                 jmp     UPDCRAMPTR    ; Set pointer to color RAM to match new cursor position
 :               jmp     PLOT          ; Get cursor position
 
-; Init Timer
+;-----------------------------------------------------------------------------------
+; InitTimer     Initlalize a VIA timer to run at 1ms so we can do timings
+;-----------------------------------------------------------------------------------
 
 InitTimer:
 
@@ -1090,17 +949,6 @@ SetNextStyle:   lda NextStyle         ; Take the style index and multiply by 2
                 bpl :-
                 rts
 
-; String literals at the end of file, as was the style at the time!
-
-.include "fakedata.inc"
-
-startstr:       .literal "STARTING...", 13, 0
-exitstr:        .literal "EXITING...", 13, 0
-framestr:       .literal "  RENDER TIME: ", 0
-titlestr:       .literal 12, "PETROCK", 0
-titlelen = * - titlestr
-clrGREEN:       .literal $99, $93, 0
-
 ; Visual style definitions.  See the 'visualDef' structure defn in petrock.inc
 ; Each of these small tables includes the characters needed to draw the corners,
 ; and horizontal and vertical lines needed to form a box.
@@ -1126,3 +974,13 @@ CheckerboardStyle:                    ; PETSCII screen codes for checkerboard st
 StyleTable:
   .word SkinnyRoundStyle, BreakoutStyle, CheckerboardStyle, DrawSquareStyle
 
+; String literals at the end of file, as was the style at the time!
+
+.include "fakedata.inc"
+
+startstr:       .literal "STARTING...", 13, 0
+exitstr:        .literal "EXITING...", 13, 0
+framestr:       .literal "  RENDER TIME: ", 0
+titlestr:       .literal 12, "C64PETROCK.COM", 0
+titlelen = * - titlestr
+clrGREEN:       .literal $99, $93, 0
