@@ -272,9 +272,8 @@ GotSerial:      ldy SerialBufPos
                 cpy #SerialBufLen      
                 bne @nooverflow
                 ldy #0
-                sta SerialBufPos
-@nooverflow:                    
-                sta SerialBuf, y
+
+@nooverflow:    sta SerialBuf, y
                 iny
                 sty SerialBufPos
                 
@@ -282,16 +281,9 @@ GotSerial:      ldy SerialBufPos
                 beq :+
                 rts                       ; No CR, back to caller
 
-:               cpy SerialBufPos          ; Are we in the right char pos for it?
-                beq :+                    ;  Yep - Process packet
-                ldy #0                    ;  Nope - Restart filling buffer
-                sta SerialBufPos
-                beq @done
-
-:               jsr GotSerialPacket
-
-@done:          rts
-
+:               cpy #SerialBufLen         ; Are we in the right char pos for it?
+                beq GotSerialPacket       ;  Yep - Process packet
+                                          ;  Nope - Restart filling buffer
 BogusData:
                 ldy #0
                 sty SerialBufPos
