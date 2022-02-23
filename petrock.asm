@@ -47,6 +47,7 @@ ScratchStart:
     SerialBufLen = 12                   ; Matches the packet size from ESP32
     SerialBufPos:    .res  1            ; Current index into serial buffer
     SerialBuf:       .res  SerialBufLen ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
+    DemoMode:        .res  1            ; Demo mode enabled
 .include "serdrv.var"                   ; Include serial driver variables
 ScratchEnd:
 
@@ -113,9 +114,16 @@ realStart:      cld                   ; Turn off decimal mode
                 jsr SerialIoctl       ; Enable Serial!  Behold the power!
 drawLoop:       
                 jsr GetSerialChar
-                cmp #$FF              ; BUGBUG Incomplete test, must check error returned
+                cmp #$ff              ; If byte is $ff, check if "no data" was flagged
+                bne @havebyte
+                cpx #<SER_ERR_NO_DATA
+                bne @havebyte
+                cpy #>SER_ERR_NO_DATA 
                 beq :+
-                jsr GotSerial
+
+@havebyte:      ldx DemoMode          ; If we're in demo mode, ignore the bytes we received
+                bne drawLoop
+                jsr GotSerial         ; Otherwise process them
                 jmp drawLoop
 :          
                .if TIMING             ; If 'TIMING' is defined we turn the border bit RASTHI
@@ -128,8 +136,10 @@ drawLoop:
                 sta BORDER_COLOR      ;  places in the draw code to help see how
               .endif                  ;  long various parts of it are taking.
 
-                ;jsr FillPeaks
-                jsr DrawVU            ; Draw the VU bar at the top of the screen
+                lda DemoMode          ; Load demo data if demo mode is on
+                beq @dovu
+                jsr FillPeaks
+@dovu:          jsr DrawVU            ; Draw the VU bar at the top of the screen
 
               .if TIMING              ; If 'TIMING' is defined we turn the border
                 lda #LIGHT_GREY       ;  color to different colors at particular
@@ -188,10 +198,18 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
               .endif
 
                 jsr GETIN             ; Keyboard Handling - check for RUN
-                cmp #83               ; Letter "S"
-                bne nextChar
+
+                cmp #$53              ; Letter "S"
+                bne @notStyle
                 jsr SetNextStyle
-nextChar:       cmp #$03
+                bne drawLoop
+
+@notStyle:      cmp #$44              ; Letter "D"
+                bne @notDemo
+                jsr SwitchDemoMode
+                bne drawLoop
+
+@notDemo:       cmp #$03
                 bne drawLoop
 
                 ldy #>exitstr         ; Output exiting text and exit
@@ -247,8 +265,7 @@ ScrollBands:    lda Peaks+NUM_BANDS-1 ; Wrap data around from end to start
 ;-----------------------------------------------------------------------------------
 ; GotSerial - Process incoming serial bytes from the ESP32 
 ;-----------------------------------------------------------------------------------
-; Copy data from the current index of the fake data table to the current peak data
-; and vu value
+; Store character in serial buffer. Processes packet if character completes it.
 ;-----------------------------------------------------------------------------------
 
 GotSerial:      ldy SerialBufPos
@@ -347,6 +364,9 @@ FillPeaks:      tya
 
                 ldy #15               ; Copy the 16 bytes at the ptr address to the
 :               lda (zptmpB), y       ;   PeakData table
+                and #$0f              ; Normalize value between 1 and 16
+                clc
+                adc #1
                 sta Peaks, y
                 dey
                 bpl :-
@@ -383,6 +403,27 @@ InitVariables:  ldx #ScratchEnd-ScratchStart
                 bne :-
 
                 rts
+
+;-----------------------------------------------------------------------------------
+; SwitchDemoMode
+;-----------------------------------------------------------------------------------
+; Toggle demo mode. If we switch it off, clear peaks and VU data.
+;-----------------------------------------------------------------------------------
+
+SwitchDemoMode: lda DemoMode
+                eor #$01
+                sta DemoMode
+                bne @done
+
+                lda #0
+                ldy #15
+:               sta Peaks, y
+                dey
+                bpl :-
+
+                sta VU
+
+@done:          rts
 
 ;-----------------------------------------------------------------------------------
 ; GetCursorAddr - Returns address of X/Y position on screen
@@ -890,8 +931,8 @@ fcloop:         lda BandColors,x
 
 .if STATIC_COLOR
 
-DrawBand:       cmp #2                ; Can't draw less than height 2
-                bcs :+
+DrawBand:       cmp #1                ; Can't draw height 1
+                bne :+
                 rts
 :               sta Height            ; Height is height of bar itself
                 txa
@@ -920,8 +961,11 @@ DrawBand:       cmp #2                ; Can't draw less than height 2
 lineSwitch:     ldy SquareX           ; Y will be the X-pos (zp addr mode not supported on X register)
                 lda tempY             ; Current screen line
                 cmp #YSIZE - BOTTOM_MARGIN - 1
-                beq drawLastLine
-                cmp SquareY           ; Compare to screen line of top of bar
+                bne @notlastline
+                lda Height            ; If 0 height, write blanks instead of band base
+                bne drawLastLine
+                beq drawLastBlanks
+@notlastline:   cmp SquareY           ; Compare to screen line of top of bar
                 bcc drawBlanks
                 beq drawFirstLine
                 bcs drawMiddleLine
@@ -955,6 +999,12 @@ drawLastLine:
                 sta (zptmp),y         ; line to the Y register.
                 iny
                 lda CharDefs + visualDef::BOTTOMRIGHTSYMBOL
+                sta (zptmp),y
+                rts
+drawLastBlanks:
+                lda #' '
+                sta (zptmp),y
+                iny
                 sta (zptmp),y
                 rts
 
@@ -1060,7 +1110,7 @@ InitTimer:
                 rts
 
 ;-----------------------------------------------------------------------------------
-; NextStyle - Select a visual style for the spectrum analyzer by copying a small
+; SetNextStyle - Select a visual style for the spectrum analyzer by copying a small
 ;             character table of PETSCII screen codes into our 'styletable' that
 ;             we use to draw the spectrum analyzer bars.  It defines the PETSCII
 ;             chars that we use to draw the corners and lines.
