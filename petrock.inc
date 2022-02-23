@@ -32,6 +32,12 @@ RASTLO              = $D012  ; Loword of screen raster
     
 COLOR_MEM           = $d800   ; Screen color memory of 1000 bytes
 
+; Serial magic bytes
+
+MAGIC_LEN = 8                   ; Size of full packet
+MAGIC_BYTE_0        = 'D'
+MAGIC_BYTE_1        = 'P'
+
 ; Clock related items
 
 TALO                = $DD04
@@ -66,6 +72,9 @@ LIGHT_GREEN         = 13
 LIGHT_BLUE          = 14
 LIGHT_GREY          = 15
 
+BAUD300             = 4
+BAUD1200            = 2
+BAUD2400            = 0
 ; Includes --------------------------------------------------------------------------
 
     .include        "cbm_kernal.inc"
@@ -78,7 +87,7 @@ LIGHT_GREY          = 15
 MINUTE_JIFFIES      = 3600              ; Number of jiffies in a minute
 SECOND_JIFFIES      = 60                ; Number of jiffies in a second
 
-CLRHOME		        = $93               ; Clear screen
+CLRHOME             = $93               ; Clear screen
 
 ; Defines below this line should generally not require changing
 
@@ -100,13 +109,13 @@ VUCOLORPOS          = COLOR_MEM  + XSIZE + 2
 ; Symbol definitions for square drawing - PETSCI for graphics that make a square 
 
 TOPLEFTSYMBOL       = 79                
-TOPRIGHTSYMBOL	    = 80
+TOPRIGHTSYMBOL      = 80
 BOTTOMLEFTSYMBOL    = 76
 BOTTOMRIGHTSYMBOL   = 122               
-VLINE1SYMBOL	    = 101               ; Vertical line left side
+VLINE1SYMBOL        = 101               ; Vertical line left side
 VLINE2SYMBOL        = 103               ; Vertical line right side
-HLINE1SYMBOL	    = 119               ; Horizontal line top side
-HLINE2SYMBOL	    = 111               ; Horizontal line bottom side
+HLINE1SYMBOL        = 119               ; Horizontal line top side
+HLINE2SYMBOL        = 111               ; Horizontal line bottom side
 
 MEDIUMSHADE         = 45                ; Symbol for an empty VU square
 VUSYMBOL            = 244               ; Symbol for a filled VU square
@@ -116,13 +125,13 @@ VUSYMBOL            = 244               ; Symbol for a filled VU square
 
 .struct visualDef
   TOPLEFTSYMBOL     .byte
-  TOPRIGHTSYMBOL	.byte
+  TOPRIGHTSYMBOL    .byte
   BOTTOMLEFTSYMBOL  .byte
   BOTTOMRIGHTSYMBOL .byte
-  VLINE1SYMBOL	    .byte
+  VLINE1SYMBOL      .byte
   VLINE2SYMBOL      .byte
-  HLINE1SYMBOL	    .byte
-  HLINE2SYMBOL	    .byte
+  HLINE1SYMBOL      .byte
+  HLINE2SYMBOL      .byte
 .endstruct
 
 ; Our UI Definitions ------------------------------------------------------
@@ -131,28 +140,28 @@ LEFT_MARGIN         = 4
 RIGHT_MARGIN        = LEFT_MARGIN
 BAND_WIDTH          = 2
 TOP_MARGIN          = 3
-BOTTOM_MARGIN       = 2
-BAND_HEIGHT         = 20
+BOTTOM_MARGIN       = 4
+BAND_HEIGHT         = YSIZE-TOP_MARGIN-BOTTOM_MARGIN
 
 
 ;----------------------------------------------------------------------------
 ; Common definitions for all Commodore BASICs
 ;----------------------------------------------------------------------------
-    CR			    = $0D ; CARRIAGE RETURN
-    QUOT		    = $22 ; Quote characarter
-    CURDN		    = $11 ; cursor down
+    CR              = $0D ; CARRIAGE RETURN
+    QUOT            = $22 ; Quote characarter
+    CURDN           = $11 ; cursor down
 ;---------- tokens ----------------------------------------------------
-    TK_MUL		    = $ac ; *
-    TK_POW		    = $ae ; ^
-    TK_GT		    = $b1 ; >
-    TK_EQU		    = $b2 ; =
-    TK_LT		    = $b3 ; <
-    TK_IF		    = $8b ; IF
-    TK_REM		    = $8f ; REM
-    TK_PRINT	    = $99 ; PRINT
-    TK_SYS		    = $9e ; SYS
-    TK_NEW		    = $a2 ; NEW
-    TK_THEN		    = $a7 ; THEN
-    TK_PEEK		    = $c2 ; PEEK
+    TK_MUL          = $ac ; *
+    TK_POW          = $ae ; ^
+    TK_GT           = $b1 ; >
+    TK_EQU          = $b2 ; =
+    TK_LT           = $b3 ; <
+    TK_IF           = $8b ; IF
+    TK_REM          = $8f ; REM
+    TK_PRINT        = $99 ; PRINT
+    TK_SYS          = $9e ; SYS
+    TK_NEW          = $a2 ; NEW
+    TK_THEN         = $a7 ; THEN
+    TK_PEEK         = $c2 ; PEEK
 
 .assert (TOP_MARGIN + BOTTOM_MARGIN + BAND_HEIGHT <= YSIZE), error
