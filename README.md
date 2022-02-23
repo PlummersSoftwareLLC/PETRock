@@ -16,7 +16,8 @@ This repository's code targets the ca65 assembler and cl65 linker that are part 
 With the cc65 toolkit installed and in your PATH, you can build the application using the following command:
 
 ```text
-cl65 --verbose -o petrock.prg -t none petrock.asm
+ca65 -v -g -l c64rock.lst -D C64=1 -t none petrock.asm 
+ld65 -v -m c64rock.map -o c64rock.prg -t none petrock.o none.lib 
 ```
 
 ## Loading and running
@@ -25,7 +26,7 @@ Assuming the petrock.prg file is on a disk in device 8, the spectrum analyzer di
 
 
 ```text
-LOAD "PETROCK.PRG",8
+LOAD "C64ROCK.PRG",8
 ```
 
 ## 6502 assembly
