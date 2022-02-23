@@ -283,10 +283,14 @@ GotSerial:      ldy SerialBufPos
                 rts                       ; No CR, back to caller
 
 :               cpy SerialBufPos          ; Are we in the right char pos for it?
-                bne :+                    ;  Nope - Ignore this NUL
-                jsr GotSerialPacket
-:
-                rts
+                beq :+                    ;  Yep - Process packet
+                ldy #0                    ;  Nope - Restart filling buffer
+                sta SerialBufPos
+                beq @done
+
+:               jsr GotSerialPacket
+
+@done:          rts
 
 BogusData:
                 ldy #0
