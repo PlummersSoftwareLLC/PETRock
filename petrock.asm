@@ -44,7 +44,9 @@ ScratchStart:
     Peaks:           .res  NUM_BANDS    ; Peak Data for current frame
     NextStyle:       .res  1            ; The next style we will pick
     CharDefs:        .res  8            ; Storage for the visualDef currently in use
-
+    SerialBufLen = 12                   ; Matches the packet size from ESP32
+    SerialBufPos:    .res  1            ; Current index into serial buffer
+    SerialBuf:       .res  SerialBufLen ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
 .include "serdrv.var"                   ; Include serial driver variables
 ScratchEnd:
 
@@ -103,22 +105,34 @@ realStart:      cld                   ; Turn off decimal mode
 
                 jsr EmptyBorder       ; Draw the screen frame and decorations
 
-drawLoop:       jsr InitTimer         ; Prep the timer for this frame
+                jsr OpenSerial        ; Open the serial port for data from the ESP32   
+                          
+                lda #2                ; Could just be non-zero, but mightbe device ID!
+                ldy #0                ;   either way, zero is disable, we want the opposite
+                ldx #0
+                jsr SerialIoctl       ; Enable Serial!  Behold the power!
+drawLoop:       
+                jsr GetSerialChar
+                cmp #$FF              ; BUGBUG Incomplete test, must check error returned
+                beq :+
+                jsr GotSerial
+                jmp drawLoop
+:          
+               .if TIMING             ; If 'TIMING' is defined we turn the border bit RASTHI
+                jsr InitTimer         ; Prep the timer for this frame
                 lda #$11              ; Start the timer
                 sta CRA
-
-              .if TIMING              ; If 'TIMING' is defined we turn the border bit RASTHI
-:               bit RASTHI
-                bmi :-
+@waitforraster: bit RASTHI
+                bmi @waitforraster
                 lda #DARK_GREY        ;  color to different colors at particular
                 sta BORDER_COLOR      ;  places in the draw code to help see how
               .endif                  ;  long various parts of it are taking.
 
-                jsr FillPeaks
+                ;jsr FillPeaks
                 jsr DrawVU            ; Draw the VU bar at the top of the screen
 
               .if TIMING              ; If 'TIMING' is defined we turn the border
-                lda #LIGHT_GREY        ;  color to different colors at particular
+                lda #LIGHT_GREY       ;  color to different colors at particular
                 sta BORDER_COLOR      ;  places in the draw code to help see how
               .endif                  ;  long various parts of it are taking.
 
@@ -139,29 +153,23 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 sta shiftCountdown
                 jsr ScrollColors
 :             .endif
+
               .if TIMING
                 lda #BLACK
                 sta BORDER_COLOR
 :               bit RASTHI
                 bpl :-
-
-              .endif
-
                 lda #0                ; Stop the clock
                 sta CRA
-
                 lda #LIGHT_BLUE
                 sta TEXT_COLOR
-
                 ldx #24               ; Print "Current Frame" banner
                 ldy #09
                 clc
                 jsr PlotEx
                 ldy #>framestr
-
                 lda #<framestr
                 jsr WriteLine
-
                 lda CTLO              ; Display the number of ms the frame took. I realized
                 eor #$FF              ; that 65536 - time is the same as flipping the bits,
                 tax                   ; so that's why I xor instead of subtracting
@@ -177,6 +185,7 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 lda #' '
                 jsr CHROUT
                 jsr CHROUT
+              .endif
 
                 jsr GETIN             ; Keyboard Handling - check for RUN
                 cmp #83               ; Letter "S"
@@ -203,6 +212,19 @@ EmptyBorder:    ldy #>clrGREEN        ; Set cursor to white and clear screen
                 sta Height
                 jsr DrawSquare
                 jsr InitVU            ; Let the VU meter paint its color mem, etc
+
+                lda #LIGHT_BLUE
+                sta TEXT_COLOR
+
+                ldy #XSIZE/2-titlelen/2         ; Print title banner
+                ldx #YSIZE-1
+                clc
+                jsr PlotEx
+                ldy #>titlestr
+                lda #<titlestr
+                jsr WriteLine
+
+
               .if STATIC_COLOR
                 jsr FillBandColors
               .endif
@@ -222,6 +244,83 @@ ScrollBands:    lda Peaks+NUM_BANDS-1 ; Wrap data around from end to start
                 pla
                 sta Peaks
 
+;-----------------------------------------------------------------------------------
+; GotSerial - Process incoming serial bytes from the ESP32 
+;-----------------------------------------------------------------------------------
+; Copy data from the current index of the fake data table to the current peak data
+; and vu value
+;-----------------------------------------------------------------------------------
+
+GotSerial:      ldy SerialBufPos
+                cpy #SerialBufLen      
+                bne @nooverflow
+                ldy #0
+                sta SerialBufPos
+@nooverflow:                    
+                sta SerialBuf, y
+                iny
+                sty SerialBufPos
+                
+                cmp #00                   ; Look for carriage return meaning end
+                beq :+
+                rts                       ; No CR, back to caller
+
+:               cpy SerialBufPos          ; Are we in the right char pos for it?
+                bne :+                    ;  Nope - Ignore this NUL
+                jsr GotSerialPacket
+:
+                rts
+
+BogusData:
+                ldy #0
+                sty SerialBufPos
+                rts
+
+; GotSerialPacket - Recieved a string followed by a carriage return so inspect it
+;                   to see if it could be a data packet, as indicated by 'DP' as
+;                   the first two bytes.  Data Packet? Dave Plummer?  You decide!
+
+GotSerialPacket: 
+                ldy SerialBufPos          ; Get received packet length
+                lda SerialBuf             ; Look for 'D'
+                cmp #68
+                bne BogusData
+
+                lda SerialBuf+1           ; Look for 'P'
+                cmp #80
+                bne BogusData
+
+                lda SerialBuf + 2
+                sta VU
+                PeakDataNibbles = SerialBuf + 3
+        
+                ldy #0
+                ldx #0
+                
+:               lda PeakDataNibbles, y    ; Get the next byte from the buffer
+                and #%11110000            ; Get the top nibble
+                lsr
+                lsr
+                lsr
+                lsr
+                clc
+                adc #1                    ; Value of 1 is useless in the graph so add one to values
+                
+                sta Peaks+1, x            ; Store it in the peaks table
+                lda PeakDataNibbles, y    ; Get that SAME byte from the buffer
+                and #%00001111            ; Now we want the low nibble
+                clc
+                adc #1
+                sta Peaks, x              ; Store it in the peaks table
+
+                inx                       ; advance to the next peak
+                inx
+                iny                       ; Advance to the next byte of serial data
+
+                cpy #8                    ; Have we done bytes 0-3 yet?
+                bne :-                    ; Repeat until we have
+                rts
+                
 ;-----------------------------------------------------------------------------------
 ; FillPeaks
 ;-----------------------------------------------------------------------------------
@@ -998,6 +1097,8 @@ SetNextStyle:   lda NextStyle         ; Take the style index and multiply by 2
 startstr:       .literal "STARTING...", 13, 0
 exitstr:        .literal "EXITING...", 13, 0
 framestr:       .literal "  RENDER TIME: ", 0
+titlestr:       .literal 12, "PETROCK", 0
+titlelen = * - titlestr
 clrGREEN:       .literal $99, $93, 0
 
 ; Visual style definitions.  See the 'visualDef' structure defn in petrock.inc

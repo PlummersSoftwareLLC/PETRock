@@ -72,6 +72,9 @@ LIGHT_GREEN         = 13
 LIGHT_BLUE          = 14
 LIGHT_GREY          = 15
 
+BAUD300             = 4
+BAUD1200            = 2
+BAUD2400            = 0
 ; Includes --------------------------------------------------------------------------
 
     .include        "cbm_kernal.inc"
@@ -137,8 +140,8 @@ LEFT_MARGIN         = 4
 RIGHT_MARGIN        = LEFT_MARGIN
 BAND_WIDTH          = 2
 TOP_MARGIN          = 3
-BOTTOM_MARGIN       = 2
-BAND_HEIGHT         = 20
+BOTTOM_MARGIN       = 4
+BAND_HEIGHT         = YSIZE-TOP_MARGIN-BOTTOM_MARGIN
 
 
 ;----------------------------------------------------------------------------
