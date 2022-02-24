@@ -808,6 +808,60 @@ vloop:          lda lineChar          ; Store the line char in screen mem
                 bne vloop
                 rts
 
+
+;-----------------------------------------------------------------------------------
+; PutText - Put a string of characters at the center of a message line
+;-----------------------------------------------------------------------------------
+;           A - Message line number
+;           X - Low byte of message address
+;           Y - High byte of message address
+;-----------------------------------------------------------------------------------
+
+PutText:
+                MESSAGE_BLOCK_LOC = SCREEN_MEM + XSIZE * (TOP_MARGIN + BAND_HEIGHT) + LEFT_MARGIN
+                TEXT_WIDTH = XSIZE - LEFT_MARGIN - RIGHT_MARGIN
+                
+                stx zptmpB
+                sty zptmpB+1
+
+                tax
+                ldy #XSIZE
+                jsr Multiply
+
+                clc
+                lda resultLo
+                adc #<MESSAGE_BLOCK_LOC
+                sta zptmp
+                lda resultHi
+                adc #>MESSAGE_BLOCK_LOC
+                sta zptmp+1
+
+                ldy #ff
+:               iny
+                lda (zptmpB),y
+                bne :-
+                dey
+
+
+
+                lda #XSIZE
+                sec
+                sbc 
+
+
+
+;-----------------------------------------------------------------------------------
+; GetTextLength - Determine length of a text message
+;-----------------------------------------------------------------------------------
+;       OUT A - Message length
+;           X - Low byte of message address
+;           Y - High byte of message address
+;-----------------------------------------------------------------------------------
+
+GetTextLength:
+
+
+
 ;-----------------------------------------------------------------------------------
 ; SetPrevScheme - Switch to previous color scheme
 ;-----------------------------------------------------------------------------------
@@ -963,9 +1017,9 @@ FcColorMem:     lda #YSIZE-TOP_MARGIN-BOTTOM_MARGIN   ; Count of rows to paint c
 ;
 ; the bar top, the bar middle, or bar bottom
 
-DrawBand:       cmp #1                ; Can't draw height 1
+DrawBand:       cmp #1                ; Can't draw height 1, so draw 0
                 bne :+
-                rts
+                lda #0
 :               sta Height            ; Height is height of bar itself
                 txa
                 asl
