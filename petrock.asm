@@ -43,7 +43,7 @@ ScratchStart:
     VU:              .res  1            ; VU Audio Data
     Peaks:           .res  NUM_BANDS    ; Peak Data for current frame
     NextStyle:       .res  1            ; The next style we will pick
-    CharDefs:        .res  8            ; Storage for the visualDef currently in use
+    CharDefs:        .res  10           ; Storage for the visualDef currently in use
     SerialBufLen = 12                   ; Matches the packet size from ESP32
     SerialBufPos:    .res  1            ; Current index into serial buffer
     SerialBuf:       .res  SerialBufLen ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
@@ -136,6 +136,9 @@ drawLoop:
 
 @havebyte:      jsr GotSerial
                 jmp drawLoop
+
+                lda #'*'
+                jsr PutSerialChar
 
                .if TIMING             ; If 'TIMING' is defined we turn the border bit RASTHI
                 jsr InitTimer         ; Prep the timer for this frame
@@ -314,13 +317,10 @@ GotSerialPacket:
                 cmp #MAGIC_BYTE_0
                 bne BogusData
 
-                lda SerialBuf+1           ; Look for 'P'
-                cmp #MAGIC_BYTE_1
-                bne BogusData
-
-                lda SerialBuf + 2
+                lda SerialBuf+MAGIC_LEN
                 sta VU
-                PeakDataNibbles = SerialBuf + 3
+
+                PeakDataNibbles = SerialBuf + MAGIC_LEN + VU_LEN
         
                 ldy #0
                 ldx #0
@@ -1062,10 +1062,7 @@ FcColorMem:     lda #YSIZE-TOP_MARGIN-BOTTOM_MARGIN   ; Count of rows to paint c
 ;
 ; the bar top, the bar middle, or bar bottom
 
-DrawBand:       cmp #1                ; Can't draw height 1, so draw 0
-                bne :+
-                lda #0
-:               sta Height            ; Height is height of bar itself
+DrawBand:       sta Height            ; Height is height of bar itself
                 txa
                 asl
                 sta SquareX           ; Bar xPos on screen
@@ -1094,8 +1091,10 @@ lineSwitch:     ldy SquareX           ; Y will be the X-pos (zp addr mode not su
                 cmp #YSIZE - BOTTOM_MARGIN - 1
                 bne @notlastline
                 lda Height            ; If 0 height, write blanks instead of band base
-                bne drawLastLine
                 beq drawLastBlanks
+                cmp #1
+                beq drawOneLine
+                bne drawLastLine
 @notlastline:   cmp SquareY           ; Compare to screen line of top of bar
                 bcc drawBlanks
                 beq drawFirstLine
@@ -1130,6 +1129,14 @@ drawLastLine:
                 sta (zptmp),y         ; line to the Y register.
                 iny
                 lda CharDefs + visualDef::BOTTOMRIGHTSYMBOL
+                sta (zptmp),y
+                rts
+drawOneLine:
+                ldy SquareX
+                lda CharDefs + visualDef::ONELINE1SYMBOL
+                sta (zptmp),y
+                iny
+                lda CharDefs + visualDef::ONELINE2SYMBOL
                 sta (zptmp),y
                 rts
 drawLastBlanks:
@@ -1216,16 +1223,16 @@ SetNextStyle:   lda NextStyle         ; Take the style index and multiply by 2
 ; and horizontal and vertical lines needed to form a box.
 
 SkinnyRoundStyle:                     ; PETSCII screen codes for round tube bar style
-  .byte 85, 73, 74, 75, 66, 66, 74, 75
+  .byte 85, 73, 74, 75, 66, 66, 74, 75, 32, 32
 
 DrawSquareStyle:                      ; PETSCII screen codes for square linedraw style
-  .byte 79, 80, 76, 122, 101, 103, 76, 122
+  .byte 79, 80, 76, 122, 101, 103, 76, 122, 32, 32
 
 BreakoutStyle:                        ; PETSCII screen codes for style that looks like breakout
-  .byte 239, 250, 239, 250, 239, 250, 239, 250
+  .byte 239, 250, 239, 250, 239, 250, 239, 250, 239, 250
 
 CheckerboardStyle:                    ; PETSCII screen codes for checkerboard style
-  .byte 102, 92, 102, 92, 102, 92,102, 92
+  .byte 102, 92, 102, 92, 102, 92,102, 92, 102, 92
 
 ; Lookup table - each of the above mini tables is listed in this lookup table so that
 ;                we can easily find items 0-3

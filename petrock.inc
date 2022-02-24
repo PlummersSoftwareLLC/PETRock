@@ -29,11 +29,13 @@ RASTLO              = $D012  ; Loword of screen raster
     
 COLOR_MEM           = $d800   ; Screen color memory of 1000 bytes
 
-; Serial magic bytes
+; Serial data packet
 
-MAGIC_LEN = 8                   ; Size of full packet
-MAGIC_BYTE_0        = 68        ; ASCII 'D'       
-MAGIC_BYTE_1        = 80        ; ASCII 'P'
+MAGIC_LEN           = 1       ; Number of magic bytes if any
+MAGIC_BYTE_0        = (3 << 4 + 15); Index of "D" plus index of "P"
+DATA_LEN            = 8       ; Size of Data portion
+VU_LEN              = 1       ; Size of VU
+PACKET_LENGTH       = MAGIC_LEN + DATA_LEN + VU_LEN + 1 ; NUL terminated so +1
 
 ; Clock related items
 
@@ -69,9 +71,10 @@ LIGHT_GREEN         = 13
 LIGHT_BLUE          = 14
 LIGHT_GREY          = 15
 
-BAUD300             = 4
-BAUD1200            = 2
-BAUD2400            = 0
+BAUD300             = 6
+BAUD1200            = 4
+BAUD2400            = 2
+BAUD4800            = 0
 ; Includes --------------------------------------------------------------------------
 
     .include        "cbm_kernal.inc"
@@ -123,6 +126,8 @@ VUSYMBOL            = 244               ; Symbol for a filled VU square
   VLINE2SYMBOL      .byte
   HLINE1SYMBOL      .byte
   HLINE2SYMBOL      .byte
+  ONELINE1SYMBOL    .byte
+  ONELINE2SYMBOL    .byte
 .endstruct
 
 ; Our UI Definitions ------------------------------------------------------
