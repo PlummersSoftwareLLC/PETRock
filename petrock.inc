@@ -128,6 +128,8 @@ VUSYMBOL            = 244               ; Symbol for a filled VU square
   VLINE2SYMBOL      .byte
   HLINE1SYMBOL      .byte
   HLINE2SYMBOL      .byte
+  ONELINE1SYMBOL    .byte
+  ONELINE2SYMBOL    .byte
 .endstruct
 
 ; Our UI Definitions ------------------------------------------------------

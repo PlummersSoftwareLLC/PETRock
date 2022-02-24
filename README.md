@@ -24,7 +24,6 @@ ld65 -v -m c64rock.map -o c64rock.prg -t none petrock.o none.lib
 
 Assuming the petrock.prg file is on a disk in device 8, the spectrum analyzer display can be loaded using the following command:
 
-
 ```text
 LOAD "C64ROCK.PRG",8
 ```

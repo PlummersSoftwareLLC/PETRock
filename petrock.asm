@@ -43,11 +43,12 @@ ScratchStart:
     VU:              .res  1            ; VU Audio Data
     Peaks:           .res  NUM_BANDS    ; Peak Data for current frame
     NextStyle:       .res  1            ; The next style we will pick
-    CharDefs:        .res  8            ; Storage for the visualDef currently in use
+    CharDefs:        .res  10           ; Storage for the visualDef currently in use
     SerialBufLen = 12                   ; Matches the packet size from ESP32
     SerialBufPos:    .res  1            ; Current index into serial buffer
     SerialBuf:       .res  SerialBufLen ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
     DemoMode:        .res  1            ; Demo mode enabled
+    CurSchemeIndex:  .res  1            ; Current band color scheme index
 .include "serdrv.var"                   ; Include serial driver variables
 ScratchEnd:
 
@@ -195,10 +196,20 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 jsr SetNextStyle
                 bne drawLoop
 
-@notStyle:      cmp #$44              ; Letter "D"
+@notStyle:      cmp #$43              ; Letter "C"
+                bne @notColor
+                jsr SetNextScheme
+                jmp drawLoop
+
+@notColor:      cmp #$C3              ; Shift "C"
+                bne @notShiftC
+                jsr SetPrevScheme
+                jmp drawLoop
+
+@notShiftC:     cmp #$44              ; Letter "D"
                 bne @notDemo
                 jsr SwitchDemoMode
-                bne drawLoop
+                jmp drawLoop
 
 @notDemo:       cmp #$03
                 bne drawLoop
@@ -798,41 +809,132 @@ vloop:          lda lineChar          ; Store the line char in screen mem
                 rts
 
 ;-----------------------------------------------------------------------------------
-; DrawBand      Draws a single band of the spectrum analyzer
-;-----------------------------------------------------------------------------------
-;               X       Band Number     [PRESERVED]
-;               A       Height of bar
+; SetPrevScheme - Switch to previous color scheme
 ;-----------------------------------------------------------------------------------
 
-BandColors:     .byte RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE,  RED
-                .byte ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, RED, YELLOW
-                BandColorSize = * - BandColors
-                .assert(BandColorSize >= (XSIZE - LEFT_MARGIN - RIGHT_MARGIN) / BAND_WIDTH), error
+SetPrevScheme:
+                dec CurSchemeIndex
+                bpl FillBandColors    ; If index >= 0, we're done
+
+                lda #<BandSchemeTable ; Base address for color scheme table
+                sta zptmpB
+                lda #>BandSchemeTable
+                sta zptmpB+1
+                
+                ldy #1                ; Prep for first scheme table entry
+
+@loop:          iny                   ; Move on to next table entry
+                
+                lda (zptmpB),y        ; Check if we hit the null pointer
+                iny
+                ora (zptmpB),y
+
+                bne @loop             ; No? Continue looking
+
+                dey                   ; Back up one table entry
+                dey
+                tya
+                clc
+                lsr                   ; Divide index by two and store
+                sta CurSchemeIndex
+
+                bcs FcColorMem        ; Branch always (lsr shifted bit into carry)
 
 
-FillBandColors: lda #YSIZE-TOP_MARGIN-BOTTOM_MARGIN   ; Count of rows to paint color for
+;-----------------------------------------------------------------------------------
+; SetNextScheme - Switch to next color scheme
+;-----------------------------------------------------------------------------------
+
+SetNextScheme:
+                lda #<BandSchemeTable ; Base address for color scheme table
+                sta zptmpB
+                lda #>BandSchemeTable
+                sta zptmpB+1
+
+                inc CurSchemeIndex    ; Bump up color scheme index
+                lda CurSchemeIndex
+                asl
+                tay
+
+                lda (zptmpB),y
+                iny
+                ora (zptmpB),y
+                bne FcColorMem
+                sta CurSchemeIndex    ; Zero pointer = end of table, so start over
+                beq FcColorMem
+
+
+;-----------------------------------------------------------------------------------
+; FillBandColors - Color bands using the current band color scheme
+;
+; This routine spends quite a few instructions juggling bytes around registers, the
+; stack and zptmpC. The reason basically is that indirect indexed addressing can
+; only be done when loading and saving A, using Y as the index register. We have two
+; pointers to apply indirect indexed adressing to (color RAM and band color scheme).
+;-----------------------------------------------------------------------------------
+
+FillBandColors:
+                lda #<BandSchemeTable ; Base address for color scheme table
+                sta zptmpB
+                lda #>BandSchemeTable
+                sta zptmpB+1
+
+FcColorMem:     lda #YSIZE-TOP_MARGIN-BOTTOM_MARGIN   ; Count of rows to paint color for
                 sta tempY
+
                 BAND_COLOR_LOC = COLOR_MEM + XSIZE * TOP_MARGIN + LEFT_MARGIN
-                lda #<BAND_COLOR_LOC
+
+                lda #<BAND_COLOR_LOC                  ; Base address for bar color RAM
                 sta zptmp
                 lda #>BAND_COLOR_LOC
                 sta zptmp+1
 
-fcrow:          ldx #BandColorSize-1  ; X is length of color table
-                txa
-                asl                   ; We start at the right edge of each column
-                clc
-                adc #BAND_WIDTH-1
-                tay
-fcloop:         lda BandColors,x
-                sta (zptmp),y
-                dey
-                sta (zptmp),y
-                dey
-                dex
-                bpl fcloop
+                ; The following is the assembly version of:
+                ;   colorCount = (byte**)BandSchemeTable[CurSchemeIndex][0]
 
-                lda zptmp
+                lda CurSchemeIndex    ; Load color scheme address from table...
+                asl
+                tay
+                lda (zptmpB),y
+                tax
+                iny 
+                lda (zptmpB),y
+
+                stx zptmpB            ; ...and make that the new base address in zptmpB
+                sta zptmpB+1
+
+@fcrow:         ldy #0                ; Load scheme color count
+                lda (zptmpB),y        ;   and save it as the scheme color index
+                sta zptmpC
+
+                lda #NUM_BANDS        ; Color in from right-hand char of right-most bar
+                asl                   ; First char index = (NUM_BANDS * 2) - 1
+                tay
+                dey
+
+@fcloop:        tya                   ; Push character index on stack
+                pha
+
+                ldy zptmpC            ; Load color from scheme and hold it in X
+                lda (zptmpB),y
+                tax
+                dey                   ; Back up one color in the scheme
+                bne @notzero          ; Color index zero? We've used our scheme colors
+                lda (zptmpB),y        ;   so it's time to reload scheme color count
+                tay
+@notzero:       sty zptmpC            ; Store scheme color index
+
+                pla                   ; Pop character index
+                tay
+
+                txa                   ; Write color to bar chars
+                sta (zptmp),y
+                dey
+                sta (zptmp),y
+                dey
+                bpl @fcloop
+
+                lda zptmp             ; Move on to next row
                 clc
                 adc #XSIZE
                 sta zptmp
@@ -840,9 +942,17 @@ fcloop:         lda BandColors,x
                 inc zptmp+1
 
 :               dec tempY
-                bne fcrow
+                bne @fcrow
 
                 rts
+
+;-----------------------------------------------------------------------------------
+; DrawBand      Draws a single band of the spectrum analyzer
+;-----------------------------------------------------------------------------------
+;               X       Band Number     [PRESERVED]
+;               A       Height of bar
+;-----------------------------------------------------------------------------------
+
 
 ; DrawBand - Static version that makes assumptions:
 ;               No dynamic color memory
@@ -853,10 +963,7 @@ fcloop:         lda BandColors,x
 ;
 ; the bar top, the bar middle, or bar bottom
 
-DrawBand:       cmp #1                ; Can't draw height 1
-                bne :+
-                rts
-:               sta Height            ; Height is height of bar itself
+DrawBand:       sta Height            ; Height is height of bar itself
                 txa
                 asl
                 sta SquareX           ; Bar xPos on screen
@@ -885,8 +992,10 @@ lineSwitch:     ldy SquareX           ; Y will be the X-pos (zp addr mode not su
                 cmp #YSIZE - BOTTOM_MARGIN - 1
                 bne @notlastline
                 lda Height            ; If 0 height, write blanks instead of band base
-                bne drawLastLine
                 beq drawLastBlanks
+                cmp #1
+                beq drawOneLine
+                bne drawLastLine
 @notlastline:   cmp SquareY           ; Compare to screen line of top of bar
                 bcc drawBlanks
                 beq drawFirstLine
@@ -921,6 +1030,14 @@ drawLastLine:
                 sta (zptmp),y         ; line to the Y register.
                 iny
                 lda CharDefs + visualDef::BOTTOMRIGHTSYMBOL
+                sta (zptmp),y
+                rts
+drawOneLine:
+                ldy SquareX
+                lda CharDefs + visualDef::ONELINE1SYMBOL
+                sta (zptmp),y
+                iny
+                lda CharDefs + visualDef::ONELINE2SYMBOL
                 sta (zptmp),y
                 rts
 drawLastBlanks:
@@ -1007,16 +1124,16 @@ SetNextStyle:   lda NextStyle         ; Take the style index and multiply by 2
 ; and horizontal and vertical lines needed to form a box.
 
 SkinnyRoundStyle:                     ; PETSCII screen codes for round tube bar style
-  .byte 85, 73, 74, 75, 66, 66, 74, 75
+  .byte 85, 73, 74, 75, 66, 66, 74, 75, 32, 32
 
 DrawSquareStyle:                      ; PETSCII screen codes for square linedraw style
-  .byte 79, 80, 76, 122, 101, 103, 76, 122
+  .byte 79, 80, 76, 122, 101, 103, 76, 122, 32, 32
 
 BreakoutStyle:                        ; PETSCII screen codes for style that looks like breakout
-  .byte 239, 250, 239, 250, 239, 250, 239, 250
+  .byte 239, 250, 239, 250, 239, 250, 239, 250, 239, 250
 
 CheckerboardStyle:                    ; PETSCII screen codes for checkerboard style
-  .byte 102, 92, 102, 92, 102, 92,102, 92
+  .byte 102, 92, 102, 92, 102, 92,102, 92, 102, 92
 
 ; Lookup table - each of the above mini tables is listed in this lookup table so that
 ;                we can easily find items 0-3
@@ -1026,6 +1143,42 @@ CheckerboardStyle:                    ; PETSCII screen codes for checkerboard st
 
 StyleTable:
   .word SkinnyRoundStyle, BreakoutStyle, CheckerboardStyle, DrawSquareStyle
+
+;-----------------------------------------------------------------------------------
+; Band color schemes
+;
+; Collection of band color schemes the user can cycle through:
+; - The pointer table is zero-pointer terminated.
+; - Each scheme is a list of colors that the background color fill routine cycles
+;   through. The number of colors in a scheme are specified just before the first
+;   actual color value. Note that the color schemes are applied to the bars right
+;   to left.
+;-----------------------------------------------------------------------------------
+
+BandSchemeTable: 
+                .word RainbowScheme
+                .word WhiteScheme
+                .word GreenScheme
+                .word RedScheme
+                .word RWBScheme
+                .word 0
+
+RainbowScheme:  .byte 16
+                .byte RED, ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, RED
+                .byte ORANGE, YELLOW, GREEN, CYAN, BLUE, PURPLE, RED, YELLOW
+
+WhiteScheme:    .byte 1
+                .byte WHITE
+
+GreenScheme:    .byte 1
+                .byte GREEN
+
+RedScheme:      .byte 1
+                .byte RED
+
+RWBScheme:      .byte 3
+                .byte RED, WHITE, BLUE
+
 
 ; String literals at the end of file, as was the style at the time!
 
