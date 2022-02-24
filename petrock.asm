@@ -196,7 +196,7 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 bne drawLoop
 
 @notStyle:      cmp #$43              ; Letter "C"
-                bne @notC
+                bne @notColor
                 jsr SetNextScheme
                 jmp drawLoop
 
@@ -385,14 +385,6 @@ InitVariables:  ldx #ScratchEnd-ScratchStart
                 dex
                 cpx #$ff
                 bne :-
-
-.if STATIC_COLOR
-                ; Select first band color scheme
-                lda #<BandSchemeTable
-                sta CurSchemeIndex
-                lda #>BandSchemeTable
-                sta CurSchemeIndex+1
-.endif
 
                 rts
 
@@ -1155,6 +1147,7 @@ BandSchemeTable:
                 .word WhiteScheme
                 .word GreenScheme
                 .word RedScheme
+                .word RWBScheme
                 .word 0
 
 RainbowScheme:  .byte 16
@@ -1168,7 +1161,11 @@ GreenScheme:    .byte 1
                 .byte GREEN
 
 RedScheme:      .byte 1
-                .byte LIGHT_RED
+                .byte RED
+
+RWBScheme:      .byte 3
+                .byte RED, WHITE, BLUE
+
 
 ; String literals at the end of file, as was the style at the time!
 
