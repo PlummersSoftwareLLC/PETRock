@@ -49,6 +49,10 @@ ScratchStart:
     SerialBuf:       .res  SerialBufLen ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
     DemoMode:        .res  1            ; Demo mode enabled
     CurSchemeIndex:  .res  1            ; Current band color scheme index
+    BorderColor:     .res  1
+    BkgndColor:      .res  1
+    TextColor:       .res  1
+
 .include "serdrv.var"                   ; Include serial driver variables
 ScratchEnd:
 
@@ -101,8 +105,16 @@ start:          jmp realStart
 realStart:      cld                   ; Turn off decimal mode
                 jsr InitVariables     ; Zero (init) all of our BSS storage variables
 
+                lda VIC_BORDERCOLOR         ; Save current colors for later
+                sta BorderColor
+                lda VIC_BG_COLOR0
+                sta BkgndColor
+                lda TEXT_COLOR
+                sta TextColor
+
+
                 lda #BLACK            ; Screen and border to black
-                sta SCREEN_COLOR
+                sta VIC_BG_COLOR0
                 sta VIC_BORDERCOLOR
 
                 jsr EmptyBorder       ; Draw the screen frame and decorations
@@ -210,6 +222,15 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
 
 @notDemo:       cmp #$03
                 bne drawLoop
+
+                lda BorderColor         ; Restore colors to how we found them
+                sta VIC_BORDERCOLOR
+                lda BkgndColor
+                sta VIC_BG_COLOR0
+                lda TextColor
+                sta TEXT_COLOR
+
+                jsr ClearScreen
 
                 ldy #>exitstr         ; Output exiting text and exit
                 lda #<exitstr
@@ -457,9 +478,7 @@ GetCursorAddr:  tya
 ; ClearScreen
 ;-----------------------------------------------------------------------------------
 
-ClearScreen:    lda #CLRHOME          ; PETSCII for clear screen
-                jsr CHROUT
-                rts
+ClearScreen:    jmp CLRSCR
 
 ;-----------------------------------------------------------------------------------
 ; WriteLine -   Writes a line of text to the screen using CHROUT ($FFD2)
@@ -470,13 +489,86 @@ ClearScreen:    lda #CLRHOME          ; PETSCII for clear screen
 
 WriteLine:      sta zptmp
                 sty zptmp+1
-                ldy #0
+WLRaw:          ldy #0
 @loop:          lda (zptmp),y
-                beq done
+                beq @done
                 jsr CHROUT
                 iny
                 bne @loop
-done:           rts
+@done:          rts
+
+;-----------------------------------------------------------------------------------
+; PutText - Put a string of characters at the center of a message line
+;-----------------------------------------------------------------------------------
+;           A - Message line number
+;           X - Low byte of message address
+;           Y - High byte of message address
+;-----------------------------------------------------------------------------------
+
+                TEXT_WIDTH = XSIZE - LEFT_MARGIN - RIGHT_MARGIN
+
+PutText:
+                stx zptmp
+                sty zptmp+1
+
+                clc
+                adc #TOP_MARGIN+BAND_HEIGHT
+                tax
+                ldy #LEFT_MARGIN
+                lda #WHITE
+                sta TEXT_COLOR
+                jsr PlotEx
+
+                ldy #ff
+:               iny
+                lda (zptmp),y
+                bne :-
+                dey
+
+                tya
+                sec 
+                sbc #TEXT_WIDTH+1
+                eor #ff
+                lsr
+                
+                tax
+                tay
+                
+                lda #' '
+:               jsr CHROUT
+                dey
+                bne :-
+
+                jsr WLRaw
+
+                txa
+                tay
+
+                lda #' '
+:               jsr CHROUT
+                dey
+                bpl :-
+
+                rts
+
+;-----------------------------------------------------------------------------------
+; ClearTextBlock - Clear text block
+;-----------------------------------------------------------------------------------
+
+ClearTextBlock:
+                clc
+                lda #WHITE
+                sta TEXT_COLOR
+
+                lda #3
+                sta tempY
+
+                ldx #TOP_MARGIN+BAND_HEIGHT
+                ldy #LEFT_MARGIN
+                jsr PlotEx
+
+                ldy #TEXT_WIDTH
+
 
 ;-----------------------------------------------------------------------------------
 ; DrawVU        Draw the current VU meter at the top of the screen
@@ -807,60 +899,6 @@ vloop:          lda lineChar          ; Store the line char in screen mem
                 dec tempDrawLine      ; One less line to go
                 bne vloop
                 rts
-
-
-;-----------------------------------------------------------------------------------
-; PutText - Put a string of characters at the center of a message line
-;-----------------------------------------------------------------------------------
-;           A - Message line number
-;           X - Low byte of message address
-;           Y - High byte of message address
-;-----------------------------------------------------------------------------------
-
-PutText:
-                MESSAGE_BLOCK_LOC = SCREEN_MEM + XSIZE * (TOP_MARGIN + BAND_HEIGHT) + LEFT_MARGIN
-                TEXT_WIDTH = XSIZE - LEFT_MARGIN - RIGHT_MARGIN
-                
-                stx zptmpB
-                sty zptmpB+1
-
-                tax
-                ldy #XSIZE
-                jsr Multiply
-
-                clc
-                lda resultLo
-                adc #<MESSAGE_BLOCK_LOC
-                sta zptmp
-                lda resultHi
-                adc #>MESSAGE_BLOCK_LOC
-                sta zptmp+1
-
-                ldy #ff
-:               iny
-                lda (zptmpB),y
-                bne :-
-                dey
-
-
-
-                lda #XSIZE
-                sec
-                sbc 
-
-
-
-;-----------------------------------------------------------------------------------
-; GetTextLength - Determine length of a text message
-;-----------------------------------------------------------------------------------
-;       OUT A - Message length
-;           X - Low byte of message address
-;           Y - High byte of message address
-;-----------------------------------------------------------------------------------
-
-GetTextLength:
-
-
 
 ;-----------------------------------------------------------------------------------
 ; SetPrevScheme - Switch to previous color scheme
@@ -1237,3 +1275,5 @@ framestr:       .literal "  RENDER TIME: ", 0
 titlestr:       .literal 12, "C64PETROCK.COM", 0
 titlelen = * - titlestr
 clrGREEN:       .literal $99, $93, 0
+
+teststr:        .literal "CENTERED TEST", 0

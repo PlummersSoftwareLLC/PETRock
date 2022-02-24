@@ -23,9 +23,7 @@ TEXT_COLOR          = $0286   ; Current output color
 SCRATCH_START       = $033C   ; Second cassette buffer on PET
 SCRATCH_END         = $03FB   ; End of cassette buffer  
 SCREEN_MEM          = $0400   ; Screen buffer of 1000 bytes
-    
-SCREEN_COLOR        = VIC_BG_COLOR0
-    
+        
 RASTHI              = $D011  ; Hiword of screen raster   
 RASTLO              = $D012  ; Loword of screen raster
     
