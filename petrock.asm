@@ -124,6 +124,9 @@ drawLoop:
 @havebyte:      jsr GotSerial
                 jmp drawLoop
 
+                lda #'*'
+                jsr PutSerialChar
+
                .if TIMING             ; If 'TIMING' is defined we turn the border bit RASTHI
                 jsr InitTimer         ; Prep the timer for this frame
                 lda #$11              ; Start the timer
@@ -282,13 +285,10 @@ GotSerialPacket:
                 cmp #MAGIC_BYTE_0
                 bne BogusData
 
-                lda SerialBuf+1           ; Look for 'P'
-                cmp #MAGIC_BYTE_1
-                bne BogusData
-
-                lda SerialBuf + 2
+                lda SerialBuf+MAGIC_LEN
                 sta VU
-                PeakDataNibbles = SerialBuf + 3
+
+                PeakDataNibbles = SerialBuf + MAGIC_LEN + VU_LEN
         
                 ldy #0
                 ldx #0

@@ -65,19 +65,24 @@ NOFILE          = $f701
 ; Read-only words used by code/kernal API routines
 ;-----------------------------------------------------------------------------------
 
-strt24:         .word $01cb     ; 459   start bit times
-;strt12:         .word $0442     ; 1090    not referenced directly, but through Y       
-;strt03:         .word $1333     ; 4915    register indexing
+strtbit:
+strt48:         .word 225       ; 225     Made up by Dave after reading Wikipedia
+strt24:         .word $01cb     ; 459     From the Transactor article
+strt12:         .word $0442     ; 1090    
+strt03:         .word $1333     ; 4915    
 
-full24:         .word $01a5     ; 421   full bit times
-;full12:         .word $034d     ; 845     not referenced directly, but through Y
-;full03:         .word $0d52     ; 3410    register indexing
+fullbit:
+full48:         .word 208       ; 225     Made up by Dave after reading Wikipedia
+full24:         .word $01a5     ; 421     From the Transactor article
+full12:         .word $034d     ; 845     not referenced directly, but through Y
+full03:         .word $0d52     ; 3410    register indexing
 
 ; Control Registers
 ; 
 ; 300  - $06  3284 0xCD4   
 ; 1200 - $08  822  0x336   
 ; 2400 - $0A  410  0x19a
+; 4800 - We lack the technology to predict the next element in this pattern
         
 baudrate        = 10           ; chr$(10) == $0A == 2400 baud
 databits        = 0             
@@ -157,7 +162,7 @@ GetBufferChar:
 
 PutSerialChar:
         pha
-        ldx #2
+        ldx #RS232_DEV
         jsr CHKOUT
         pla
         jsr BSOUT
@@ -186,14 +191,14 @@ SerialIoctl:
 ser_setup:
         ; set things up for 2400 bps
         
-        lda strt24
-        sta ser_strtlo
-        lda strt24+1
-        sta ser_strthi
-        lda full24
-        sta ser_fulllo
-        lda full24+1
-        sta ser_fullhi
+;        lda strt48
+;        sta ser_strtlo
+;        lda strt48+1
+;        sta ser_strthi
+;        lda full48
+;        sta ser_fulllo
+;        lda full48+1
+;        sta ser_fullhi
 
         lda #<ser_nmi64
         ldy #>ser_nmi64
@@ -419,14 +424,14 @@ ser_enable:
         ; tay     
         ; lda strt24,y
         
-        ldy #BAUD2400   ; We could allow selection by Y reg here but we only ever need 2400
-        lda strt24,y    ;   so I've coded it to 2400 exclusively for this project
+        ldy #BAUD4800   ; We could allow selection by Y reg here but we only ever need 2400
+        lda strtbit,y    ;   so I've coded it to 2400 exclusively for this project
         sta ser_strtlo  ; overwrite values in nmi handler
-        lda strt24+1,y
+        lda strtbit+1,y
         sta ser_strthi
-        lda full24,y
+        lda fullbit,y
         sta ser_fulllo
-        lda full24+1,y
+        lda fullbit+1,y
         sta ser_fullhi
         
         lda ENABL
