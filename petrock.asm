@@ -120,13 +120,11 @@ drawLoop:
                 cpx #<SER_ERR_NO_DATA
                 bne @havebyte
                 cpy #>SER_ERR_NO_DATA 
-                beq :+
+                beq @donedata
 
-@havebyte:      ldx DemoMode          ; If we're in demo mode, ignore the bytes we received
-                bne drawLoop
-                jsr GotSerial         ; Otherwise process them
+@havebyte:      jsr GotSerial
                 jmp drawLoop
-:          
+
                .if TIMING             ; If 'TIMING' is defined we turn the border bit RASTHI
                 jsr InitTimer         ; Prep the timer for this frame
                 lda #$11              ; Start the timer
@@ -135,9 +133,9 @@ drawLoop:
                 bmi @waitforraster
                 lda #DARK_GREY        ;  color to different colors at particular
                 sta VIC_BORDERCOLOR   ;  places in the draw code to help see how
-              .endif                  ;  long various parts of it are taking.
+              .endif    
 
-                lda DemoMode          ; Load demo data if demo mode is on
+@donedata:      lda DemoMode          ; Load demo data if demo mode is on
                 beq @dovu
                 jsr FillPeaks
 @dovu:          jsr DrawVU            ; Draw the VU bar at the top of the screen
@@ -260,18 +258,26 @@ GotSerial:      ldy SerialBufPos
                 cpy #SerialBufLen      
                 bne @nooverflow
                 ldy #0
-
-@nooverflow:    sta SerialBuf, y
+                sta SerialBufPos
+@nooverflow:                    
+                sta SerialBuf, y
                 iny
                 sty SerialBufPos
-
+                
                 cmp #00                   ; Look for carriage return meaning end
                 beq :+
                 rts                       ; No CR, back to caller
 
-:               cpy #SerialBufLen         ; Are we in the right char pos for it?
-                beq GotSerialPacket       ;  Yep - Process packet
-                                          ;  Nope - Restart filling buffer
+:               cpy SerialBufPos          ; Are we in the right char pos for it?
+                beq :+                    ;  Yep - Process packet
+                ldy #0                    ;  Nope - Restart filling buffer
+                sta SerialBufPos
+                beq @done
+
+:               jsr GotSerialPacket
+
+@done:          rts
+
 BogusData:
                 ldy #0
                 sty SerialBufPos
