@@ -206,7 +206,7 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
 @notShiftC:     cmp #$44              ; Letter "D"
                 bne @notDemo
                 jsr SwitchDemoMode
-                bne drawLoop
+                jmp drawLoop
 
 @notDemo:       cmp #$03
                 bne drawLoop
@@ -821,10 +821,9 @@ SetPrevScheme:
                 lda #>BandSchemeTable
                 sta zptmpB+1
                 
-                ldy #0                ; Start at first scheme table entry
+                ldy #1                ; Prep for first scheme table entry
 
 @loop:          iny                   ; Move on to next table entry
-                iny               
                 
                 lda (zptmpB),y        ; Check if we hit the null pointer
                 iny
