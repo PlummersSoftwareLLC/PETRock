@@ -505,8 +505,6 @@ WLRaw:          ldy #0
 ;           Y - High byte of message address
 ;-----------------------------------------------------------------------------------
 
-                TEXT_WIDTH = XSIZE - LEFT_MARGIN - RIGHT_MARGIN
-
 PutText:
                 stx zptmp
                 sty zptmp+1
@@ -519,16 +517,16 @@ PutText:
                 sta TEXT_COLOR
                 jsr PlotEx
 
-                ldy #ff
+                ldy #$ff
 :               iny
                 lda (zptmp),y
                 bne :-
                 dey
 
                 tya
-                sec 
-                sbc #TEXT_WIDTH+1
-                eor #ff
+                clc 
+                sbc #TEXT_WIDTH
+                eor #$ff
                 lsr
                 
                 tax
@@ -560,15 +558,24 @@ ClearTextBlock:
                 lda #WHITE
                 sta TEXT_COLOR
 
-                lda #3
-                sta tempY
-
                 ldx #TOP_MARGIN+BAND_HEIGHT
-                ldy #LEFT_MARGIN
+                stx tempY
+
+@rowloop:       ldy #LEFT_MARGIN
                 jsr PlotEx
 
                 ldy #TEXT_WIDTH
+                lda #' '
+:               jsr CHROUT
+                dey
+                bne :-
 
+                inc tempY
+                ldx tempY
+                cpx #YSIZE-1
+                bne @rowloop
+
+                rts
 
 ;-----------------------------------------------------------------------------------
 ; DrawVU        Draw the current VU meter at the top of the screen

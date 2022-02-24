@@ -133,6 +133,7 @@ BAND_WIDTH          = 2
 TOP_MARGIN          = 3
 BOTTOM_MARGIN       = 4
 BAND_HEIGHT         = YSIZE-TOP_MARGIN-BOTTOM_MARGIN
+TEXT_WIDTH          = XSIZE-LEFT_MARGIN-RIGHT_MARGIN
 
 
 ;----------------------------------------------------------------------------
