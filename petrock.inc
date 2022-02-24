@@ -33,7 +33,7 @@ COLOR_MEM           = $d800   ; Screen color memory of 1000 bytes
 
 ; Serial magic bytes
 
-MAGIC_LEN = 8                   ; Size of full packet
+MAGIC_LEN           = 8         ; Size of full packet
 MAGIC_BYTE_0        = 68        ; ASCII 'D'       
 MAGIC_BYTE_1        = 80        ; ASCII 'P'
 
@@ -125,6 +125,8 @@ VUSYMBOL            = 244               ; Symbol for a filled VU square
   VLINE2SYMBOL      .byte
   HLINE1SYMBOL      .byte
   HLINE2SYMBOL      .byte
+  ONELINE1SYMBOL    .byte
+  ONELINE2SYMBOL    .byte
 .endstruct
 
 ; Our UI Definitions ------------------------------------------------------
