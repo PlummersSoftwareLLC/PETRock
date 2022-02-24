@@ -918,10 +918,11 @@ FcColorMem:     lda #YSIZE-TOP_MARGIN-BOTTOM_MARGIN   ; Count of rows to paint c
                 ldy zptmpC            ; Load color from scheme and hold it in X
                 lda (zptmpB),y
                 tax
-                dey
-                bne @notzero          ; if Y is zero, we've used our scheme colors
+                dey                   ; Back up one color in the scheme
+                bne @notzero          ; Color index zero? We've used our scheme colors
                 lda (zptmpB),y        ;   so it's time to reload scheme color count
-@notzero:       sta zptmpC            ; Store scheme color index
+                tay
+@notzero:       sty zptmpC            ; Store scheme color index
 
                 pla                   ; Pop character index
                 tay
