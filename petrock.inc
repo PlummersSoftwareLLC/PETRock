@@ -20,8 +20,8 @@ zptmpB              = $FD
 zptmpC              = $22
                 
 TEXT_COLOR          = $0286   ; Current output color
-SCRATCH_START       = $033C   ; Second cassette buffer on PET
-SCRATCH_END         = $03FB   ; End of cassette buffer  
+SCRATCH_START       = $033C   ; Datasette buffer
+SCRATCH_END         = $03FB   ; End of datasette buffer  
 SCREEN_MEM          = $0400   ; Screen buffer of 1000 bytes
         
 RASTHI              = $D011  ; Hiword of screen raster   
@@ -137,9 +137,9 @@ TEXT_WIDTH          = XSIZE-LEFT_MARGIN-RIGHT_MARGIN
 ;----------------------------------------------------------------------------
 ; Common definitions for all Commodore BASICs
 ;----------------------------------------------------------------------------
-    CR              = $0D ; CARRIAGE RETURN
+    CR              = $0D ; Carriage return
     QUOT            = $22 ; Quote characarter
-    CURDN           = $11 ; cursor down
+    CURDN           = $11 ; Cursor down
 ;---------- tokens ----------------------------------------------------
     TK_MUL          = $ac ; *
     TK_POW          = $ae ; ^

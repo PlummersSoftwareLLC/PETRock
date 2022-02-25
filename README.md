@@ -4,12 +4,7 @@
 
 A spectrum analyzer display for the C64 that receives its data from an ESP32 MCU on the user port that does the audio processing, FFT, etc.
 
-## Configuring and building
-
-Towards the top of the [`petrock.asm`](petrock.asm) file, a number of symbols can be defined that can be used to configure the build:
-|Name|Possible values|Mandatory|Meaning|
-|-|-|-|-|
-|DEBUG|0 or 1|Yes|Set to 1 to enable code that only is included for debug builds.|
+## Building
 
 This repository's code targets the ca65 assembler and cl65 linker that are part of the [cc65](https://cc65.github.io/) GitHub project. You will need a fairly recent build of cc65 for assembly of this repository's contents to work. If you receive errors about the .literal mnemonic, this is the likely reason.
 
@@ -27,6 +22,10 @@ Assuming the petrock.prg file is on a disk in device 8, the spectrum analyzer di
 ```text
 LOAD "C64ROCK.PRG",8
 ```
+
+When the application is running, its appearance can be modified by pressing certain keys. Also, a demo mode can be enabled in case no serial input is available.
+
+You can press H to see what key presses are recognized.
 
 ## 6502 assembly
 
