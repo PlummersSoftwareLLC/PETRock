@@ -711,7 +711,7 @@ PutText:
                 lda #' '              ; Write trailing whitespace
 :               jsr CHROUT
                 dey
-                bpl :-
+                bne :-
 
                 rts
 
