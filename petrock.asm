@@ -49,6 +49,11 @@ ScratchStart:
     SerialBuf:       .res  SerialBufLen ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
     DemoMode:        .res  1            ; Demo mode enabled
     CurSchemeIndex:  .res  1            ; Current band color scheme index
+    BorderColor:     .res  1            ; Border color at startup
+    BkgndColor:      .res  1            ; Background color at startup
+    TextColor:       .res  1            ; Text color at startup
+    TextTimeout:     .res  1            ; Indicator if text timer is active
+
 .include "serdrv.var"                   ; Include serial driver variables
 ScratchEnd:
 
@@ -99,10 +104,19 @@ start:          jmp realStart
                                       ;   onwards
 
 realStart:      cld                   ; Turn off decimal mode
+
+                jsr InitTODClocks
                 jsr InitVariables     ; Zero (init) all of our BSS storage variables
 
+                lda VIC_BORDERCOLOR   ; Save current colors for later
+                sta BorderColor
+                lda VIC_BG_COLOR0
+                sta BkgndColor
+                lda TEXT_COLOR
+                sta TextColor
+
                 lda #BLACK            ; Screen and border to black
-                sta SCREEN_COLOR
+                sta VIC_BG_COLOR0
                 sta VIC_BORDERCOLOR
 
                 jsr EmptyBorder       ; Draw the screen frame and decorations
@@ -189,12 +203,18 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 jsr CHROUT
               .endif
 
+                jsr CheckTextTimer
+
                 jsr GETIN             ; Keyboard Handling - check for RUN
 
-                cmp #$53              ; Letter "S"
+                cmp #0
+                bne @notEmpty
+                jmp drawLoop
+
+@notEmpty:      cmp #$53              ; Letter "S"
                 bne @notStyle
                 jsr SetNextStyle
-                bne drawLoop
+                jmp drawLoop
 
 @notStyle:      cmp #$43              ; Letter "C"
                 bne @notColor
@@ -212,7 +232,19 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 jmp drawLoop
 
 @notDemo:       cmp #$03
-                bne drawLoop
+                beq @exit
+                
+                jsr ShowHelp
+                jmp drawLoop
+
+@exit:          lda BorderColor         ; Restore colors to how we found them
+                sta VIC_BORDERCOLOR
+                lda BkgndColor
+                sta VIC_BG_COLOR0
+                lda TextColor
+                sta TEXT_COLOR
+
+                jsr ClearScreen
 
                 ldy #>exitstr         ; Output exiting text and exit
                 lda #<exitstr
@@ -403,7 +435,7 @@ InitVariables:  ldx #ScratchEnd-ScratchStart
 SwitchDemoMode: lda DemoMode
                 eor #$01
                 sta DemoMode
-                bne @done
+                bne @enabled
 
                 lda #0
                 ldy #15
@@ -413,7 +445,15 @@ SwitchDemoMode: lda DemoMode
 
                 sta VU
 
-@done:          rts
+                ldx #<DemoOffText
+                ldy #>DemoOffText
+
+                bne @done
+
+@enabled:       ldx #<DemoOnText
+                ldy #>DemoOnText
+
+@done:          jmp ShowTextLine
 
 ;-----------------------------------------------------------------------------------
 ; GetCursorAddr - Returns address of X/Y position on screen
@@ -454,15 +494,13 @@ GetCursorAddr:  tya
                 rts
 
 ;-----------------------------------------------------------------------------------
-; ClearScreen
+; ClearScreen   Guess.
 ;-----------------------------------------------------------------------------------
 
-ClearScreen:    lda #CLRHOME          ; PETSCII for clear screen
-                jsr CHROUT
-                rts
+ClearScreen:    jmp CLRSCR
 
 ;-----------------------------------------------------------------------------------
-; WriteLine -   Writes a line of text to the screen using CHROUT ($FFD2)
+; WriteLine     Writes a line of text to the screen using CHROUT ($FFD2)
 ;-----------------------------------------------------------------------------------
 ;               Y:  MSB of address of null-terminated string
 ;               A:  LSB
@@ -470,13 +508,155 @@ ClearScreen:    lda #CLRHOME          ; PETSCII for clear screen
 
 WriteLine:      sta zptmp
                 sty zptmp+1
-                ldy #0
+WLRaw:          ldy #0
 @loop:          lda (zptmp),y
-                beq done
+                beq @done
                 jsr CHROUT
                 iny
                 bne @loop
-done:           rts
+@done:          rts
+
+
+;-----------------------------------------------------------------------------------
+; ShowHelp      Show help text
+;-----------------------------------------------------------------------------------
+ShowHelp:
+                lda #0
+                ldx #<EmptyText
+                ldy #>EmptyText
+                jsr PutText
+
+                lda #1
+                ldx #<HelpText1
+                ldy #>HelpText1
+                jsr PutText
+
+                lda #2
+                ldx #<HelpText2
+                ldy #>HelpText2
+                jsr PutText
+
+                lda #3
+                sta TextTimeout
+
+                jmp StartTextTimer
+
+;-----------------------------------------------------------------------------------
+; ShowTextLine - Puts a line of text in the middle of the text block
+;-----------------------------------------------------------------------------------
+;               X:  LSB of address of null-terminated string
+;               Y:  MSB
+;-----------------------------------------------------------------------------------
+
+ShowTextLine:
+                txa
+                pha
+                tya
+                pha
+
+                lda #0
+                ldx #<EmptyText
+                ldy #>EmptyText
+                jsr PutText
+
+                lda #2
+                ldx #<EmptyText
+                ldy #>EmptyText
+                jsr PutText
+
+                lda #1
+                sta TextTimeout
+
+                jsr StartTextTimer
+
+                pla
+                tay
+                pla
+                tax
+
+                lda #1
+
+; Note: this routine flows into the next one
+
+;-----------------------------------------------------------------------------------
+; PutText       Put a string of characters at the center of a message line
+;-----------------------------------------------------------------------------------
+;               A:  Message line number within the text block
+;               X:  LSB of address of null-terminated string
+;               Y:  MSB
+;-----------------------------------------------------------------------------------
+
+PutText:
+                stx zptmp
+                sty zptmp+1
+
+                clc
+                adc #TOP_MARGIN+BAND_HEIGHT
+                tax
+                ldy #LEFT_MARGIN
+                lda #WHITE
+                sta TEXT_COLOR
+                jsr PlotEx
+
+                ldy #$ff
+:               iny
+                lda (zptmp),y
+                bne :-
+                dey
+
+                tya
+                clc 
+                sbc #TEXT_WIDTH
+                eor #$ff
+                lsr
+                
+                tax
+                tay
+                
+                lda #' '
+:               jsr CHROUT
+                dey
+                bne :-
+
+                jsr WLRaw
+
+                txa
+                tay
+
+                lda #' '
+:               jsr CHROUT
+                dey
+                bpl :-
+
+                rts
+
+;-----------------------------------------------------------------------------------
+; ClearTextBlock - Clear text block
+;-----------------------------------------------------------------------------------
+
+ClearTextBlock:
+                clc
+                lda #WHITE
+                sta TEXT_COLOR
+
+                ldx #TOP_MARGIN+BAND_HEIGHT
+                stx tempY
+
+@rowloop:       ldy #LEFT_MARGIN
+                jsr PlotEx
+
+                ldy #TEXT_WIDTH
+                lda #' '
+:               jsr CHROUT
+                dey
+                bne :-
+
+                inc tempY
+                ldx tempY
+                cpx #YSIZE-1
+                bne @rowloop
+
+                rts
 
 ;-----------------------------------------------------------------------------------
 ; DrawVU        Draw the current VU meter at the top of the screen
@@ -1069,6 +1249,103 @@ PlotEx:
                 jmp     UPDCRAMPTR    ; Set pointer to color RAM to match new cursor position
 :               jmp     PLOT          ; Get cursor position
 
+;----------------------------------------------------------------------------
+; InitTODClocks - Initialize CIA clockS to correct external frequency (50/60Hz)
+;
+; This routine figures out whether the C64 is connected to a 50Hz or 60Hz
+; external frequency source - that traditionally being the power grid the
+; AC adapter is connected to. It needs to know this to make the CIA time of 
+; day clock run at the right speed; getting it wrong makes the clock 20% off.
+; This routine was effectively sourced from the following web page:
+; https://codebase64.org/doku.php?id=base:efficient_tod_initialisation
+; Credits for it go to Silver Dream.
+;----------------------------------------------------------------------------
+InitTODClocks:
+                lda CIA2_CRB
+                and #$7f                ; Set CIA2 TOD clock, not alarm
+                sta CIA2_CRB
+
+                sei
+                lda #$00
+                sta CIA2_TOD10          ; Start CIA2 TOD clock
+@tickloop:      cmp CIA2_TOD10          ; Wait until tenths value changes
+                beq @tickloop
+
+                lda #$ff                ; Count down from $ffff (65535)
+                sta CIA2_TA             ; Use timer A
+                sta CIA2_TA+1
+            
+                lda #%00010001          ; Set TOD to 60Hz mode and start the
+                sta CIA2_CRA            ;   timer.
+
+                lda CIA2_TOD10
+@countloop:     cmp CIA2_TOD10          ; Wait until tenths value changes
+                beq @countloop
+
+                ldx CIA2_TA+1
+                cli
+
+                lda CIA1_CRA
+
+                cpx #$51                ; If timer HI > 51, we're at 60Hz
+                bcs @pick60hz1
+
+                ora #$80                ; Configure CIA1 TOD to run at 50Hz
+                bne @setfreq1
+
+@pick60hz1:     and #$7f                ; Configure CIA1 TOD to run at 60Hz
+
+@setfreq1:      sta CIA1_CRA
+
+                lda CIA2_CRA
+
+                cpx #$51                ; If timer HI > 51, we're at 60Hz
+                bcs @pick60hz2
+
+                ora #$80                ; Configure CIA2 TOD to run at 50Hz
+                bne @setfreq2
+
+@pick60hz2:     and #$7f                ; Configure CIA2 TOD to run at 60Hz
+
+@setfreq2:      sta CIA2_CRA
+
+                rts
+
+;-----------------------------------------------------------------------------------
+; StartTextTimer - Start the text TOD timer
+;-----------------------------------------------------------------------------------
+
+StartTextTimer:
+                lda CIA1_CRB             ; Clear CRB7 to set the TOD, not an alarm
+                and #$7f
+                sta CIA1_CRB
+
+                lda #$00
+
+                sta CIA1_TODHR
+                sta CIA1_TODMIN
+                sta CIA1_TODSEC
+                sta CIA1_TOD10
+
+                rts
+
+;-----------------------------------------------------------------------------------
+; CheckTextTimer - Clear text if TOD timer is at 3 seconds
+;-----------------------------------------------------------------------------------
+
+CheckTextTimer:
+                lda TextTimeout
+                beq @done
+                cmp CIA1_TODSEC
+                bcs @done
+
+                lda #0
+                sta TextTimeout
+
+                jmp ClearTextBlock
+
+@done:          rts
+
 ;-----------------------------------------------------------------------------------
 ; InitTimer     Initlalize a VIA timer to run at 1ms so we can do timings
 ;-----------------------------------------------------------------------------------
@@ -1078,14 +1355,14 @@ InitTimer:
                 lda   #$7F            ; Mask to turn off the CIA IRQ
                 ldx   #<TIMERSCALE    ; Timer low value
                 ldy   #>TIMERSCALE    ; Timer High value
-                sta   ICR
-                stx   TALO            ; Set to 1msec (1022 cycles per IRQ)
-                sty   TAHI
+                sta   CIA2_ICR
+                stx   CIA2_TA         ; Set to 1msec (1022 cycles per IRQ)
+                sty   CIA2_TA+1
                 lda   #$FF            ; Set counter to FFFF
-                sta   CTLO
-                sta   CTHI
+                sta   CIA2_TB
+                sta   CIA2_TB+1
                 ldy   #$51
-                sty   CRB             ; Enable and go
+                sty   CIA2_CRB        ; Enable and go
                 rts
 
 ;-----------------------------------------------------------------------------------
@@ -1190,3 +1467,11 @@ framestr:       .literal "  RENDER TIME: ", 0
 titlestr:       .literal 12, "C64PETROCK.COM", 0
 titlelen = * - titlestr
 clrGREEN:       .literal $99, $93, 0
+
+DemoOnText:     .literal "DEMO MODE ON", 0
+DemoOffText:    .literal "DEMO MODE OFF", 0
+
+EmptyText:      .byte    ' ', 0
+
+HelpText1:      .literal "C: COLOR - S: STYLE - D: DEMO", 0
+HelpText2:      .literal "RUN/STOP: EXIT", 0

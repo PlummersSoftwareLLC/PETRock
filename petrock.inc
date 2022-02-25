@@ -23,9 +23,7 @@ TEXT_COLOR          = $0286   ; Current output color
 SCRATCH_START       = $033C   ; Second cassette buffer on PET
 SCRATCH_END         = $03FB   ; End of cassette buffer  
 SCREEN_MEM          = $0400   ; Screen buffer of 1000 bytes
-    
-SCREEN_COLOR        = VIC_BG_COLOR0
-    
+        
 RASTHI              = $D011  ; Hiword of screen raster   
 RASTLO              = $D012  ; Loword of screen raster
     
@@ -41,13 +39,6 @@ PACKET_LENGTH       = MAGIC_LEN + DATA_LEN + VU_LEN + 1 ; NUL terminated so +1
 
 ; Clock related items
 
-TALO                = $DD04
-TAHI                = $DD05
-CTLO                = $DD06
-CTHI                = $DD07
-ICR                 = $DD0D
-CRA                 = $DD0E
-CRB                 = $DD0F
 VICIRQ              = $D019
 LATEN               = $FA
 KEYVAL              = $FC
@@ -140,6 +131,7 @@ BAND_WIDTH          = 2
 TOP_MARGIN          = 3
 BOTTOM_MARGIN       = 4
 BAND_HEIGHT         = YSIZE-TOP_MARGIN-BOTTOM_MARGIN
+TEXT_WIDTH          = XSIZE-LEFT_MARGIN-RIGHT_MARGIN
 
 
 ;----------------------------------------------------------------------------
