@@ -1468,7 +1468,6 @@ titlestr:       .literal 12, "C64PETROCK.COM", 0
 titlelen = * - titlestr
 clrGREEN:       .literal $99, $93, 0
 
-ExitText:       .literal "PRESS RUN/STOP TO EXIT", 0
 DemoOnText:     .literal "DEMO MODE ON", 0
 DemoOffText:    .literal "DEMO MODE OFF", 0
 
