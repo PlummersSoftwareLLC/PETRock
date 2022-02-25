@@ -1474,5 +1474,5 @@ DemoOffText:    .literal "DEMO MODE OFF", 0
 
 EmptyText:      .byte    ' ', 0
 
-HelpText1:      .literal "C: COLOR - S: STYLE - D:DEMO",0
+HelpText1:      .literal "C: COLOR - S: STYLE - D: DEMO",0
 HelpText2:      .literal "RUN/STOP: EXIT",0
