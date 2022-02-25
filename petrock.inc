@@ -39,13 +39,6 @@ PACKET_LENGTH       = MAGIC_LEN + DATA_LEN + VU_LEN + 1 ; NUL terminated so +1
 
 ; Clock related items
 
-TALO                = $DD04
-TAHI                = $DD05
-CTLO                = $DD06
-CTHI                = $DD07
-ICR                 = $DD0D
-CRA                 = $DD0E
-CRB                 = $DD0F
 VICIRQ              = $D019
 LATEN               = $FA
 KEYVAL              = $FC
