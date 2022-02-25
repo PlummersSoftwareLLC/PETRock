@@ -53,6 +53,7 @@ ScratchStart:
     BkgndColor:      .res  1            ; Background color at startup
     TextColor:       .res  1            ; Text color at startup
     TextTimeout:     .res  1            ; Indicator if text timer is active
+    DemoToggle:      .res  1            ; Update toggle to delay demo mode updates
 
 .include "serdrv.var"                   ; Include serial driver variables
 ScratchEnd:
@@ -77,12 +78,12 @@ Line10:         .word Line1           ; Next line number
 Line1:          .word Line2
                 .word 1
                 .byte TK_REM
-                .literal " - GITHUB/PLUMMERSSOFTWARELLC/", 00
-Line2:         .word Line3
+                .literal " - C64PETROCK.COM", 00
+Line2:          .word Line3
                 .word 2
                 .byte TK_REM
                 .literal " - PETROCK - COPYRIGHT 2022", 00
-Line3:         .word endOfBasic       ; PTR to next line, which is 0000
+Line3:          .word endOfBasic       ; PTR to next line, which is 0000
                 .word 3               ; Line Number 20
                 .byte TK_SYS          ;   SYS token
                 .literal " "
@@ -119,7 +120,13 @@ realStart:      cld                   ; Turn off decimal mode
                 sta VIC_BG_COLOR0
                 sta VIC_BORDERCOLOR
 
+                ldy #>clrGREEN        ; Set cursor to green and clear screen
+                lda #<clrGREEN
+                jsr WriteLine
+                
                 jsr EmptyBorder       ; Draw the screen frame and decorations
+                jsr SetNextStyle      ; Select the first visual style
+                jsr FillBandColors    ; Do initial fill of band color RAM
 
                 jsr OpenSerial        ; Open the serial port for data from the ESP32   
                           
@@ -231,7 +238,12 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 jsr SwitchDemoMode
                 jmp drawLoop
 
-@notDemo:       cmp #$03
+@notDemo:       cmp #$42              ; Letter "B"
+                bne @notborder
+                jsr ToggleBorder
+                jmp drawLoop
+
+@notborder:     cmp #$03
                 beq @exit
                 
                 jsr ShowHelp
@@ -252,10 +264,28 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
 
                 rts
 
-EmptyBorder:    ldy #>clrGREEN        ; Set cursor to white and clear screen
-                lda #<clrGREEN
-                jsr WriteLine
-                lda #0
+;-----------------------------------------------------------------------------------
+; ToggleBorder  Toggle border around spectrum analyzer area
+;-----------------------------------------------------------------------------------
+
+ToggleBorder:   lda #<SCREEN_MEM
+                sta zptmp
+                lda #>SCREEN_MEM
+                sta zptmp+1
+
+                ldy #0
+                lda (zptmp),y
+                cmp #' '
+
+                bne ClrBorderMem
+
+; Note: this routine flows into the next one
+
+;-----------------------------------------------------------------------------------
+; EmptyBorder   Draw border around spectrum analyzer area
+;-----------------------------------------------------------------------------------
+
+EmptyBorder:    lda #0
                 sta SquareX
                 sta SquareY
                 lda #XSIZE
@@ -276,12 +306,59 @@ EmptyBorder:    ldy #>clrGREEN        ; Set cursor to white and clear screen
                 lda #<titlestr
                 jsr WriteLine
 
-                jsr FillBandColors
-
-                jsr SetNextStyle      ; Select the first visual style
-
                 rts
 
+;-----------------------------------------------------------------------------------
+; ClearBorder   Remove border and decorations
+;-----------------------------------------------------------------------------------
+
+ClearBorder:    
+                lda #<SCREEN_MEM
+                sta zptmp
+                lda #>SCREEN_MEM
+                sta zptmp+1
+
+ClrBorderMem:   ldy #XSIZE-1          ; Top line
+                lda #' '
+:               sta (zptmp),y
+                dey
+                bpl :-
+
+                ldx #YSIZE-2
+
+@rowloop:       lda zptmp             ; Left and right lines
+                clc
+                adc #XSIZE
+                sta zptmp
+                lda zptmp+1
+                adc #0
+                sta zptmp+1
+                
+                lda #' '
+                ldy #0
+                sta (zptmp),y
+
+                ldy #XSIZE-1
+                sta (zptmp),y
+
+                dex
+                bne @rowloop
+
+                lda zptmp             ; Bottom line
+                clc
+                adc #XSIZE
+                sta zptmp
+                lda zptmp+1
+                adc #0
+                sta zptmp+1
+
+                ldy #XSIZE-1
+                lda #' '
+:               sta (zptmp),y
+                dey
+                bpl :-
+
+                rts
 
 ;-----------------------------------------------------------------------------------
 ; GotSerial - Process incoming serial bytes from the ESP32 
@@ -367,7 +444,14 @@ GotSerialPacket:
 ; and vu value
 ;-----------------------------------------------------------------------------------
 
-FillPeaks:      tya
+FillPeaks:      lda DemoToggle
+                eor #$01
+                sta DemoToggle
+                beq @proceed
+
+                rts
+
+@proceed:       tya
                 pha
                 txa
                 pha
@@ -1474,4 +1558,4 @@ DemoOffText:    .literal "DEMO MODE OFF", 0
 EmptyText:      .byte    ' ', 0
 
 HelpText1:      .literal "C: COLOR - S: STYLE - D: DEMO", 0
-HelpText2:      .literal "RUN/STOP: EXIT", 0
+HelpText2:      .literal "B: BORDER - RUN/STOP: EXIT", 0
