@@ -2,4 +2,5 @@
 *.prg
 *.lst
 *.map
+*.o
 

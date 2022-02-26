@@ -8,7 +8,7 @@
 
 ; Definitions -----------------------------------------------------------------------
 
-DEBUG               = 1       ; Enable code that only is included for debug builds
+DEBUG               = 0       ; Enable code that only is included for debug builds
 TIMING              = 0       ; Change border color to show drawing progress
 
 .include "basic_c64.inc"

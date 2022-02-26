@@ -148,10 +148,10 @@ drawLoop:
                 lda #'*'
                 jsr PutSerialChar
 
-               .if TIMING             ; If 'TIMING' is defined we turn the border bit RASTHI
+              .if TIMING              ; If 'TIMING' is defined we turn the border bit RASTHI
                 jsr InitTimer         ; Prep the timer for this frame
                 lda #$11              ; Start the timer
-                sta CRA
+                sta CIA2_CRA
 @waitforraster: bit RASTHI
                 bmi @waitforraster
                 lda #DARK_GREY        ;  Color to different colors at particular
@@ -182,7 +182,7 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
 :               bit RASTHI
                 bpl :-
                 lda #0                ; Stop the clock
-                sta CRA
+                sta CIA2_CRA
                 lda #LIGHT_BLUE
                 sta TEXT_COLOR
                 ldx #24               ; Print "Current Frame" banner
@@ -192,10 +192,10 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 ldy #>framestr
                 lda #<framestr
                 jsr WriteLine
-                lda CTLO              ; Display the number of ms the frame took. I realized
-                eor #$FF              ; that 65536 - time is the same as flipping the bits,
-                tax                   ; so that's why I XOR instead of subtracting
-                lda CTHI
+                lda CIA2_TB           ; Display the number of ms the frame took. I realized
+                eor #$FF              ;   that 65536 - time is the same as flipping the bits,
+                tax                   ;   so that's why I XOR instead of subtracting
+                lda CIA2_TB+1
                 eor #$ff
                 jsr BASIC_INTOUT
                 lda #' '
