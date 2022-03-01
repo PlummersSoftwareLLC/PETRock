@@ -122,6 +122,7 @@ VUSYMBOL            = 244               ; Symbol for a filled VU square
   ONELINE1SYMBOL    .byte
   ONELINE2SYMBOL    .byte
 .endstruct
+VISUALDEF_SIZE = .sizeof(visualDef)
 
 ; Our UI Definitions ------------------------------------------------------
 

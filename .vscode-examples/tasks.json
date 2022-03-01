@@ -23,7 +23,7 @@
         {
             "label": "Run on C64",
             "type": "shell",
-            "command": "x64sc c64rock.prg ",
+            "command": "x64sc -rsdev3 192.168.8.160:25232 -rsuserdev 2 -rsdev3baud 2400 c64rock.prg ",
             "args": [],
             "group": {
                 "kind": "test",

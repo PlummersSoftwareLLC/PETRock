@@ -72,7 +72,7 @@ strt12:         .word $0442     ; 1090
 strt03:         .word $1333     ; 4915    
 
 fullbit:
-full48:         .word 208       ; 225     Made up by Dave after reading Wikipedia
+full48:         .word 208       ; 208     Made up by Dave after reading Wikipedia
 full24:         .word $01a5     ; 421     From the Transactor article
 full12:         .word $034d     ; 845     not referenced directly, but through Y
 full03:         .word $0d52     ; 3410    register indexing
@@ -189,7 +189,7 @@ SerialIoctl:
 ;-----------------------------------------------------------------------------------
 
 ser_setup:
-        ; set things up for 2400 bps
+        ; set things up for our baud rate
         
 ;        lda strt48
 ;        sta ser_strtlo
@@ -368,9 +368,9 @@ ser_strtup:
         sta RODATA      ;   and next byte
         inc RODBS
         
-        lda BAUDOF      ; full tx bit time to ta
+        lda ser_fulllo  ; full tx bit time
         sta CIA2_TA
-        lda BAUDOF+1
+        lda ser_fullhi
         sta CIA2_TA+1
         
         lda #$11        ; start timer a
@@ -424,9 +424,9 @@ ser_enable:
         ; tay     
         ; lda strt24,y
         
-        ldy #BAUD4800   ; We could allow selection by Y reg here but we only ever need 2400
-        lda strtbit,y    ;   so I've coded it to 2400 exclusively for this project
-        sta ser_strtlo  ; overwrite values in nmi handler
+        ldy #BAUD2400   ; We could allow selection by Y reg here if desired
+        lda strtbit,y    ;   
+        sta ser_strtlo  ; overwrite values used by nmi handler
         lda strtbit+1,y
         sta ser_strthi
         lda fullbit,y
