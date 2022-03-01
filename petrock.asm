@@ -15,7 +15,7 @@
 ; replaced either by a new frame of demo data or an incoming serial packet and the
 ; process is repeated, running at about 40 fps.
 ;
-; Color RAM can filled with different patterns by stepping through the visual styles
+; Color RAM can be filled with different patterns by stepping through the visual styles
 ; with the C key, but it is not drawn each and every frame.  
 ;
 ; Basic bar draw is to walk down the bar and draw a blank (when above the bar), the top
@@ -29,8 +29,8 @@
 ; and stored in the PeakData table.  The code on the ESP32 sends it over as 16 nibbles
 ; packed into 8 bytes plus a VU value.
 ;
-; The serial code on the C64 is poor, and serdrv.s contains a new impl that works well
-; up to 4800 baud, which is what we run it at.
+; The built-in serial code on the C64 is poor, and serdrv.s contains a new impl that 
+; works well for receiving data up to 4800 baud.
 ;
 ;-----------------------------------------------------------------------------------
 
