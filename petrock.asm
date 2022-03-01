@@ -16,7 +16,7 @@
 ; process is repeated, running at about 40 fps.
 ;
 ; Color RAM can filled with different patterns by stepping through the visual styles
-; with the C key, but it is not drawn each and every drame.  
+; with the C key, but it is not drawn each and every frame.  
 ;
 ; Basic bar draw is to walk down the bar and draw a blank (when above the bar), the top
 ; of the bar, then the middle pieces, then the bottom.  A visual style definition is
