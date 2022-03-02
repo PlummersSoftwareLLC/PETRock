@@ -12,8 +12,7 @@ The application draws 16 vertical bands of the spectrum analyzer which can be up
 
 Color RAM can be filled with different patterns by stepping through the visual styles with the C key, but it is not drawn each and every frame.  
 
-Basic bar draw is to walk down the bar and draw a blank (when above the bar), the top of the bar, then the middle pieces, then the bottom. A visual style definition is
-set that includes all of the PETSCII chars you need to draw a band, like the corners and sides, etc. It can be changed with the S key.
+Basic bar draw is to walk down the bar and draw a blank (when above the bar), the top of the bar, then the middle pieces, then the bottom. A visual style definition is set that includes all of the PETSCII chars you need to draw a band, like the corners and sides, etc. It can be changed with the S key.
 
 Every frame the serial port is checked for incoming data which is then stored in the SerialBuf. If that fills up without a nul it is reset, but if a nul comess in at the
 right place (right packet size) and the magic byte matches, it is used as new peakdata and stored in the PeakData table. The code on the ESP32 sends it over as 16 nibbles
