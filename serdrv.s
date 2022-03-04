@@ -50,6 +50,14 @@ RODBE           = $029e
 ENABL           = $02a1
 
 ;-----------------------------------------------------------------------------------
+; Routine vectors
+;-----------------------------------------------------------------------------------
+
+NMISR           = $0318
+CKISR           = $031e
+BSOSR           = $0326
+
+;-----------------------------------------------------------------------------------
 ; Kernal ROM addresses
 ;-----------------------------------------------------------------------------------
 
@@ -60,6 +68,8 @@ OLDCHK          = $f21b
 FINDFN          = $f30f
 SETDEV          = $f31f
 NOFILE          = $f701
+RDBYTE          = $f14e
+EXITRD          = $f1b4
 
 ;-----------------------------------------------------------------------------------
 ; Read-only words used by code/kernal API routines
@@ -149,9 +159,9 @@ GetSerialChar:
 ;-----------------------------------------------------------------------------------
  
 GetBufferChar:
-        jsr $F14E
+        jsr RDBYTE
         bcc @exit
-        jmp $F1B4
+        jmp EXITRD
 @exit:
         clc
         rts
@@ -202,16 +212,16 @@ ser_setup:
 
         lda #<ser_nmi64
         ldy #>ser_nmi64
-        sta $0318
-        sty $0319
+        sta NMISR
+        sty NMISR+1
         lda #<ser_nchkin
         ldy #>ser_nchkin
-        sta $031e
-        sty $031f
+        sta CKISR
+        sty CKISR+1
         lda #<ser_nbsout
         ldy #>ser_nbsout
-        sta $0326
-        sty $0327
+        sta BSOSR
+        sty BSOSR+1
         rts
         
 ;-----------------------------------------------------------------------------------
