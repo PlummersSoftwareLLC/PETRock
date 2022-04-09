@@ -161,6 +161,8 @@ drawLoop:
 @donedata:      lda DemoMode          ; Load demo data if demo mode is on
                 beq @dovu
                 jsr FillPeaks
+                ldx #$08
+                jsr Delay
 @dovu:          jsr DrawVU            ; Draw the VU bar at the top of the screen
 
               .if TIMING              ; If 'TIMING' is defined we turn the border
@@ -263,6 +265,13 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
 
                 rts
 
+Delay:          ldy #$FF
+:               dey
+                bne :-
+                dex
+                bne Delay
+                rts
+                
 ;-----------------------------------------------------------------------------------
 ; ToggleBorder - Toggle border around spectrum analyzer area
 ;-----------------------------------------------------------------------------------
