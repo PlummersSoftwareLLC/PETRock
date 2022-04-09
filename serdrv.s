@@ -50,6 +50,14 @@ RODBE           = $029e
 ENABL           = $02a1
 
 ;-----------------------------------------------------------------------------------
+; Routine vectors
+;-----------------------------------------------------------------------------------
+
+NMISR           = $0318
+CKISR           = $031e
+BSOSR           = $0326
+
+;-----------------------------------------------------------------------------------
 ; Kernal ROM addresses
 ;-----------------------------------------------------------------------------------
 
@@ -60,6 +68,8 @@ OLDCHK          = $f21b
 FINDFN          = $f30f
 SETDEV          = $f31f
 NOFILE          = $f701
+RDBYTE          = $f14e
+EXITRD          = $f1b4
 
 ;-----------------------------------------------------------------------------------
 ; Read-only words used by code/kernal API routines
@@ -72,7 +82,7 @@ strt12:         .word $0442     ; 1090
 strt03:         .word $1333     ; 4915    
 
 fullbit:
-full48:         .word 208       ; 225     Made up by Dave after reading Wikipedia
+full48:         .word 208       ; 208     Made up by Dave after reading Wikipedia
 full24:         .word $01a5     ; 421     From the Transactor article
 full12:         .word $034d     ; 845     not referenced directly, but through Y
 full03:         .word $0d52     ; 3410    register indexing
@@ -149,9 +159,9 @@ GetSerialChar:
 ;-----------------------------------------------------------------------------------
  
 GetBufferChar:
-        jsr $F14E
+        jsr RDBYTE
         bcc @exit
-        jmp $F1B4
+        jmp EXITRD
 @exit:
         clc
         rts
@@ -189,7 +199,7 @@ SerialIoctl:
 ;-----------------------------------------------------------------------------------
 
 ser_setup:
-        ; set things up for 2400 bps
+        ; set things up for our baud rate
         
 ;        lda strt48
 ;        sta ser_strtlo
@@ -202,16 +212,16 @@ ser_setup:
 
         lda #<ser_nmi64
         ldy #>ser_nmi64
-        sta $0318
-        sty $0319
+        sta NMISR
+        sty NMISR+1
         lda #<ser_nchkin
         ldy #>ser_nchkin
-        sta $031e
-        sty $031f
+        sta CKISR
+        sty CKISR+1
         lda #<ser_nbsout
         ldy #>ser_nbsout
-        sta $0326
-        sty $0327
+        sta BSOSR
+        sty BSOSR+1
         rts
         
 ;-----------------------------------------------------------------------------------
@@ -368,9 +378,9 @@ ser_strtup:
         sta RODATA      ;   and next byte
         inc RODBS
         
-        lda BAUDOF      ; full tx bit time to ta
+        lda ser_fulllo  ; full tx bit time
         sta CIA2_TA
-        lda BAUDOF+1
+        lda ser_fullhi
         sta CIA2_TA+1
         
         lda #$11        ; start timer a
@@ -424,9 +434,9 @@ ser_enable:
         ; tay     
         ; lda strt24,y
         
-        ldy #BAUD4800   ; We could allow selection by Y reg here but we only ever need 2400
-        lda strtbit,y    ;   so I've coded it to 2400 exclusively for this project
-        sta ser_strtlo  ; overwrite values in nmi handler
+        ldy #BAUD2400   ; We could allow selection by Y reg here if desired
+        lda strtbit,y    ;   
+        sta ser_strtlo  ; overwrite values used by nmi handler
         lda strtbit+1,y
         sta ser_strthi
         lda fullbit,y
