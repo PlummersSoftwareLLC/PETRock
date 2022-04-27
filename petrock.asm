@@ -1515,7 +1515,7 @@ BandSchemeTable:
                 .word WhiteScheme
                 .word GreenScheme
                 .word RedScheme
-                .word RWBScheme
+                .word KDScheme
                 .word 0
 
 RainbowScheme:  .byte 16
@@ -1531,8 +1531,8 @@ GreenScheme:    .byte 1
 RedScheme:      .byte 1
                 .byte RED
 
-RWBScheme:      .byte 3
-                .byte RED, WHITE, BLUE
+KDScheme:       .byte 4
+                .byte ORANGE, RED, WHITE, BLUE
 
 
 ; String literals at the end of file, as was the style at the time!
