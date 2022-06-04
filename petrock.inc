@@ -6,28 +6,65 @@
 ;         Rutger van Bergen
 ;-----------------------------------------------------------------------------------
 
-; Definitions -----------------------------------------------------------------------
+; System selection -----------------------------------------------------------------
 
-DEBUG               = 0       ; Enable code that only is included for debug builds
-TIMING              = 0       ; Change border color to show drawing progress
+.ifndef C64
+    C64         = 0
+.endif
 
-.include "basic_c64.inc"
+.ifndef PET
+    PET         = 0
+.endif
 
-BASE                = $0801     ; C64 Start of BASIC
-            
-zptmp               = $FB
-zptmpB              = $FD
-zptmpC              = $22
+.if (.not (PET .xor C64))
+    .fatal "Define exactly one of PET or C64 to equal 1."
+.endif
+
+.if (C64 .and PETSDPLUS)
+    .fatal "petSD+ is currently not supported on the C64."
+.endif
+
+; Definitions ----------------------------------------------------------------------
+
+.if C64
+    __C64__             = 1
+
+    .include            "basic_c64.inc"
+    .include            "c64.inc"
+
+    BASE                = $0801     ; C64 Start of BASIC
                 
-TEXT_COLOR          = $0286   ; Current output color
-SCRATCH_START       = $033C   ; Datasette buffer
-SCRATCH_END         = $03FB   ; End of datasette buffer  
-SCREEN_MEM          = $0400   ; Screen buffer of 1000 bytes
+    zptmp               = $FB
+    zptmpB              = $FD
+    zptmpC              = $22
+                
+    TEXT_COLOR          = $0286   ; Current output color
+    SCRATCH_START       = $033C   ; Datasette buffer
+    SCRATCH_END         = $03FB   ; End of datasette buffer  
+    SCREEN_MEM          = $0400   ; Screen buffer of 1000 bytes
         
-RASTHI              = $D011  ; Hiword of screen raster   
-RASTLO              = $D012  ; Loword of screen raster
+    RASTHI              = $D011  ; Hiword of screen raster   
+    RASTLO              = $D012  ; Loword of screen raster
     
-COLOR_MEM           = $d800   ; Screen color memory of 1000 bytes
+    COLOR_MEM           = $d800   ; Screen color memory of 1000 bytes
+    TIMERSCALE          = 1022    ; Clock runs at 1.022MHz
+.endif
+
+.if PET
+    .include "pet.inc"
+
+    BASE                = $0401     ; PET Start of BASIC
+
+    zptmp               = $BD
+    zptmpB              = $00
+    zptmpC              = $1F
+
+    SCRATCH_START       = $033A   ; Second cassette buffer on PET
+    SCRATCH_END         = $03F9   ; End of cassette buffer
+    SCREEN_MEM          = $8000
+
+    CLRSCR              = $E015
+.endif
 
 ; Serial data packet
 
@@ -36,15 +73,7 @@ MAGIC_BYTE_0        = (3 << 4 + 15); Index of "D" plus index of "P"
 DATA_LEN            = 8       ; Size of Data portion
 VU_LEN              = 1       ; Size of VU
 PACKET_LENGTH       = MAGIC_LEN + DATA_LEN + VU_LEN + 1 ; NUL terminated so +1
-
-; Clock related items
-
-VICIRQ              = $D019
-LATEN               = $FA
-KEYVAL              = $FC
-    
-TIMERSCALE          = 1022    ; Clock runs at 1.022MHz
-    
+        
 ; Screen color codes
 
 BLACK               = 0
@@ -68,17 +97,17 @@ BAUD300             = 6
 BAUD1200            = 4
 BAUD2400            = 2
 BAUD4800            = 0
+
 ; Includes --------------------------------------------------------------------------
 
     .include        "cbm_kernal.inc"
     .include        "ser-kernel.inc"
     .include        "ser-error.inc"
-    .include        "c64.inc"
 
 ; System Definition -----------------------------------------------------------------
 
-MINUTE_JIFFIES      = 3600              ; Number of jiffies in a minute
 SECOND_JIFFIES      = 60                ; Number of jiffies in a second
+MINUTE_JIFFIES      = 60 * SECOND_JIFFIES ; Number of jiffies in a minute
 
 CLRHOME             = $93               ; Clear screen
 
