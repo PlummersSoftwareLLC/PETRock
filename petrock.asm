@@ -72,15 +72,20 @@ ScratchStart:
     SerialBuf:       .res  PACKET_LENGTH  ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
     SerialBufLen = *-SerialBuf            ; Length of Serial Buffer
     DemoMode:        .res  1              ; Demo mode enabled
+.if C64         ; Color's only relevant on the C64
     CurSchemeIndex:  .res  1              ; Current band color scheme index
     BorderColor:     .res  1              ; Border color at startup
     BkgndColor:      .res  1              ; Background color at startup
     TextColor:       .res  1              ; Text color at startup
-    TextTimeout:     .res  1              ; Indicator if text timer is active
+.endif
+    TextTimeout:     .res  1              ; Text timeout second count (0 = disabled)
+.if PET         ; Rudimentary approach for PET. The C64 uses a CIA timer
+    TextCountDown:   .res  2              ; Text timeout countdown timer
+.endif
     DemoToggle:      .res  1              ; Update toggle to delay demo mode updates
 
-.if C64
-    .include "serdrv.var"                     ; Include serial driver variables
+.if C64         ; Serial only for C64
+.include "serdrv.var"                     ; Include serial driver variables
 .endif
 
 ScratchEnd: 
@@ -127,22 +132,27 @@ endOfBasic:     .word 00              ;   the +7 expression above, as this is
 ; Start of Assembly Code
 ;-----------------------------------------------------------------------------------
 
-start:          jmp realStart
+start:          
 
-.if C64
-    .include "serdrv.s"               ; Include serial driver routines here, so
+.if C64         ; Serial only for C64
+                jmp realStart
+
+.include "serdrv.s"                   ; Include serial driver routines here, so
                                       ;   they're available from this point
                                       ;   onwards
+
+realStart:
 .endif
 
-realStart:      cld                   ; Turn off decimal mode
+                cld                   ; Turn off decimal mode
 
-.if C64
+.if C64         ; TOD clocks only on C64
                 jsr InitTODClocks
 .endif
                 jsr InitVariables     ; Zero (init) all of our BSS storage variables
 
-.if C64         lda VIC_BORDERCOLOR   ; Save current colors for later
+.if C64         ; Color only available on C64
+                lda VIC_BORDERCOLOR   ; Save current colors for later
                 sta BorderColor
                 lda VIC_BG_COLOR0
                 sta BkgndColor
@@ -160,7 +170,7 @@ realStart:      cld                   ; Turn off decimal mode
                 jsr EmptyBorder       ; Draw the screen frame and decorations
                 jsr SetNextStyle      ; Select the first visual style
 
-.if C64         ; color and serial only supported on C64
+.if C64         ; Color and serial only supported on C64
                 jsr FillBandColors    ; Do initial fill of band color RAM
 
                 jsr OpenSerial        ; Open the serial port for data from the ESP32   
@@ -172,7 +182,7 @@ realStart:      cld                   ; Turn off decimal mode
 
 drawLoop:       
 
-.if C64
+.if C64         ; Serial only on C64
                 jsr GetSerialChar
                 cmp #$ff              ; If byte is $ff, check if "no data" was flagged
                 bne @havebyte
@@ -185,7 +195,7 @@ drawLoop:
                 jmp drawLoop
 .endif
 
-.if TIMING && C64                   ; If 'TIMING' is defined on the C64 we turn the border bit RASTHI
+.if TIMING && C64                     ; If 'TIMING' is defined on the C64 we turn the border bit RASTHI
                 jsr InitTimer         ; Prep the timer for this frame
                 lda #$11              ; Start the timer
                 sta CIA2_CRA
@@ -202,7 +212,7 @@ drawLoop:
                 jsr Delay
 @dovu:          jsr DrawVU            ; Draw the VU bar at the top of the screen
 
-.if TIMING && C64                   ; If 'TIMING' is defined we turn the border
+.if TIMING && C64                     ; If 'TIMING' is defined we turn the border
                 lda #LIGHT_GREY       ;  color to different colors at particular
                 sta VIC_BORDERCOLOR   ;  places in the draw code to help see how
 .endif                                ;  long various parts of it are taking.
@@ -266,7 +276,7 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 jmp drawLoop
 
 @notStyle:
-.if C64
+.if C64         ; Color only available on C64
                 cmp #$43              ; Letter "C"
                 bne @notColor
                 jsr SetNextScheme
@@ -296,7 +306,7 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 jmp drawLoop
 
 @exit:
-.if C64
+.if C64         ; Color only available on C64
                 lda BorderColor       ; Restore colors to how we found them
                 sta VIC_BORDERCOLOR
                 lda BkgndColor
@@ -349,7 +359,7 @@ EmptyBorder:    lda #0
                 sta Height
                 jsr DrawSquare
 
-.if C64
+.if C64         ; Color only available on C64
                 jsr InitVU            ; Let the VU meter paint its color mem, etc
 
                 lda #LIGHT_BLUE
@@ -418,7 +428,7 @@ ClrBorderMem:   ldy #XSIZE-1          ; Top line
 
                 rts
 
-.if C64         ; serial only supported on C64
+.if C64         ; Serial only supported on C64
 
 ;-----------------------------------------------------------------------------------
 ; GotSerial     Process incoming serial bytes from the ESP32 
@@ -742,7 +752,7 @@ PutText:
                 adc #TOP_MARGIN+BAND_HEIGHT
                 tax
                 ldy #LEFT_MARGIN
-.if C64
+.if C64         ; Color only available on C64
                 lda #WHITE
                 sta TEXT_COLOR
 .endif
@@ -781,40 +791,10 @@ PutText:
                 rts
 
 ;-----------------------------------------------------------------------------------
-; ClearTextBlock - Clear text block lines
-;-----------------------------------------------------------------------------------
-
-ClearTextBlock:
-                clc                   ; Prepare for start of writing
-.if C64
-                lda #WHITE
-                sta TEXT_COLOR
-.endif
-
-                ldx #TOP_MARGIN+BAND_HEIGHT
-                stx tempY
-
-@rowloop:       ldy #LEFT_MARGIN      ; Set cursor at end of left margin
-                jsr PlotEx
-
-                ldy #TEXT_WIDTH       ; Write spaces
-                lda #' '
-:               jsr CHROUT
-                dey
-                bne :-
-
-                inc tempY             ; Move on to next line
-                ldx tempY
-                cpx #YSIZE-1
-                bne @rowloop
-
-                rts
-
-;-----------------------------------------------------------------------------------
 ; DrawVU        Draw the current VU meter at the top of the screen
 ;-----------------------------------------------------------------------------------
 
-.if C64
+.if C64         ; Color only available on the C64
                 ; Color memory bytes that will back the VU meter, and only need to be set once
 VUColorTable:   .byte RED, RED, RED, YELLOW, YELLOW, YELLOW, YELLOW, YELLOW
                 .byte GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN, GREEN
@@ -1097,7 +1077,7 @@ vloop:          lda lineChar          ; Store the line char in screen mem
                 bne vloop
                 rts
 
-.if C64
+.if C64         ; Color only available on the C64
 
 ;-----------------------------------------------------------------------------------
 ; SetPrevScheme - Switch to previous color scheme
@@ -1356,14 +1336,14 @@ lineLoop:       lda zptmp             ; Advance zptmp by one screen line down
 ;-----------------------------------------------------------------------------------
 
 PlotEx:
-.if C64
+.if C64         ; On the C64 we use, but fix, the PLOT kernal routine
                 bcs     :+
                 jsr     PLOT          ; Set cursor position using original ROM PLOT
                 jmp     UPDCRAMPTR    ; Set pointer to color RAM to match new cursor position
 :               jmp     PLOT          ; Get cursor position
 .endif
 
-.if PET
+.if PET         ; PET has no PLOT in kernal. This code is loaned from CC65's CLIB routines
                 bcs     @fetch         ; Fetch values if carry set
                 sty     CURS_X
                 stx     CURS_Y
@@ -1371,20 +1351,16 @@ PlotEx:
                 lda     ScrLo,y
                 sta     SCREEN_PTR
                 lda     ScrHi,y
-                ldy     SCR_LINELEN
-                cpy     #40+1
-                bcc     :+
-                asl     SCREEN_PTR     ; 80 column mode
-                rol
 :               ora     #$80           ; Screen at $8000
                 sta     SCREEN_PTR+1
                 rts
+
 @fetch:         ldy     CURS_X
                 ldx     CURS_Y
                 rts
-.endif
+.endif          ; PET
 
-.if C64
+.if C64         ; CIAs only available on C64
 
 ;----------------------------------------------------------------------------
 ; InitTODClocks - Initialize CIA clockS to correct external frequency (50/60Hz)
@@ -1449,11 +1425,14 @@ InitTODClocks:
 
                 rts
 
+.endif          ; C64
+
 ;-----------------------------------------------------------------------------------
 ; StartTextTimer - Start the text TOD timer
 ;-----------------------------------------------------------------------------------
 
 StartTextTimer:
+.if C64         ; CIAs only available on the C64
                 lda CIA1_CRB             ; Clear CRB7 to set the TOD, not an alarm
                 and #$7f
                 sta CIA1_CRB
@@ -1464,10 +1443,16 @@ StartTextTimer:
                 sta CIA1_TODMIN
                 sta CIA1_TODSEC
                 sta CIA1_TOD10            ; This write starts the clock
+.endif
 
+.if PET         ; We use a more rudimentary countdown timer on the PET
+                lda #$00
+                sta TextCountDown
+                lda #$02
+                sta TextCountDown+1
+.endif
                 rts
 
-.endif          ; C64
 
 ;-----------------------------------------------------------------------------------
 ; CheckTextTimer - Clear text if TOD timer is at "TextTimeout" seconds
@@ -1476,15 +1461,60 @@ StartTextTimer:
 CheckTextTimer:
                 lda TextTimeout
                 beq @done
+
+.if C64         ; Use the CIA timer on the C64
                 cmp CIA1_TODSEC
                 bcs @done
 
                 lda #0
                 sta TextTimeout
-
                 jmp ClearTextBlock
+.endif
+
+.if PET         ; Decrease countdown timer until we reach $0000
+                dec TextCountDown
+                bne @done
+                dec TextCountDown+1
+                bne @done
+
+                dec TextTimeout       ; Decrease timeout second count
+                beq ClearTextBlock    ; If we've reached 0, clear the text block
+                jmp StartTextTimer    ; Otherwise, count down another rough second
+.endif
 
 @done:          rts
+
+; Note: ClearTextBlock must be within branch reach of CheckTextTimer!
+
+;-----------------------------------------------------------------------------------
+; ClearTextBlock - Clear text block lines
+;-----------------------------------------------------------------------------------
+
+ClearTextBlock:
+                clc                   ; Prepare for start of writing
+.if C64         ; Color only available on the C64
+                lda #WHITE
+                sta TEXT_COLOR
+.endif
+
+                ldx #TOP_MARGIN+BAND_HEIGHT
+                stx tempY
+
+@rowloop:       ldy #LEFT_MARGIN      ; Set cursor at end of left margin
+                jsr PlotEx
+
+                ldy #TEXT_WIDTH       ; Write spaces
+                lda #' '
+:               jsr CHROUT
+                dey
+                bne :-
+
+                inc tempY             ; Move on to next line
+                ldx tempY
+                cpx #YSIZE-1
+                bne @rowloop
+
+                rts
 
 .if TIMING && C64
 
@@ -1566,7 +1596,7 @@ CheckerboardStyle:                    ; PETSCII screen codes for checkerboard st
 StyleTable:
   .word SkinnyRoundStyle, BreakoutStyle, CheckerboardStyle, DrawSquareStyle
 
-.if C64
+.if C64         ; Color only available on the C64
 
 ;-----------------------------------------------------------------------------------
 ; Band color schemes
@@ -1616,10 +1646,10 @@ framestr:       .literal "  RENDER TIME: ", 0
 titlestr:       .literal 12, "C64PETROCK.COM", 0
 titlelen = * - titlestr
 
-.if C64
+.if C64         ; Set text color to green on C64
 clrGREEN:       .literal $99, $93, 0
 .endif
-.if PET
+.if PET         ; Color's not a thing on the PET
 clrGREEN:       .literal $93, 0
 .endif
 
@@ -1628,10 +1658,28 @@ DemoOffText:    .literal "DEMO MODE OFF", 0
 
 EmptyText:      .byte    ' ', 0
 
-.if C64
+.if C64         ; Include help on color schemes on C64
 HelpText1:      .literal "C: COLOR - S: STYLE - D: DEMO", 0
 .endif
-.if PET
+.if PET         ; Don't mention color on the PET
 HelpText1:      .literal "S: STYLE - D: DEMO", 0
 .endif
 HelpText2:      .literal "B: BORDER - RUN/STOP: EXIT", 0
+
+.if PET         ; This is used by the PlotEx routine for the PET
+
+; Screen address tables - offset to real screen
+
+.rodata
+
+ScrLo:  .byte   $00, $28, $50, $78, $A0, $C8, $F0, $18
+        .byte   $40, $68, $90, $B8, $E0, $08, $30, $58
+        .byte   $80, $A8, $D0, $F8, $20, $48, $70, $98
+        .byte   $C0
+
+ScrHi:  .byte   $00, $00, $00, $00, $00, $00, $00, $01
+        .byte   $01, $01, $01, $01, $01, $02, $02, $02
+        .byte   $02, $02, $02, $02, $03, $03, $03, $03
+        .byte   $03
+
+.endif

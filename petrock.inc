@@ -20,10 +20,6 @@
     .fatal "Define exactly one of PET or C64 to equal 1."
 .endif
 
-.if (C64 .and PETSDPLUS)
-    .fatal "petSD+ is currently not supported on the C64."
-.endif
-
 ; Definitions ----------------------------------------------------------------------
 
 .if C64
@@ -64,6 +60,9 @@
     SCREEN_MEM          = $8000
 
     CLRSCR              = $E015
+    YSIZE               = 25
+    XSIZE               = 40
+
 .endif
 
 ; Serial data packet
@@ -120,7 +119,9 @@ MAX_VU              = 17                ; Maximum size per side of the VU meter
 
 VUPOS1              = SCREEN_MEM + XSIZE + XSIZE / 2 + 1
 VUPOS2              = SCREEN_MEM + XSIZE + 2
+.if C64
 VUCOLORPOS          = COLOR_MEM  + XSIZE + 2
+.endif
 
 ; Symbol definitions for square drawing - PETSCI for graphics that make a square 
 
