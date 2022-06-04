@@ -80,7 +80,7 @@ ScratchStart:
 .endif
     TextTimeout:     .res  1              ; Text timeout second count (0 = disabled)
 .if PET         ; Rudimentary approach for PET. The C64 uses a CIA timer
-    TextCountDown:   .res  2              ; Text timeout countdown timer
+    TextCountDown:   .res  1              ; Text timeout countdown timer
 .endif
     DemoToggle:      .res  1              ; Update toggle to delay demo mode updates
 
@@ -1351,7 +1351,7 @@ PlotEx:
                 lda     ScrLo,y
                 sta     SCREEN_PTR
                 lda     ScrHi,y
-:               ora     #$80           ; Screen at $8000
+                ora     #$80           ; Screen at $8000
                 sta     SCREEN_PTR+1
                 rts
 
@@ -1446,10 +1446,8 @@ StartTextTimer:
 .endif
 
 .if PET         ; We use a more rudimentary countdown timer on the PET
-                lda #$00
+                lda #$28
                 sta TextCountDown
-                lda #$02
-                sta TextCountDown+1
 .endif
                 rts
 
@@ -1473,8 +1471,6 @@ CheckTextTimer:
 
 .if PET         ; Decrease countdown timer until we reach $0000
                 dec TextCountDown
-                bne @done
-                dec TextCountDown+1
                 bne @done
 
                 dec TextTimeout       ; Decrease timeout second count
