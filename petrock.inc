@@ -131,9 +131,14 @@ BOTTOMLEFTSYMBOL    = 76
 BOTTOMRIGHTSYMBOL   = 122               
 VLINE1SYMBOL        = 101               ; Vertical line left side
 VLINE2SYMBOL        = 103               ; Vertical line right side
-HLINE1SYMBOL        = 119               ; Horizontal line top side
-HLINE2SYMBOL        = 111               ; Horizontal line bottom side
-
+.if C64
+HLINE1SYMBOL        = 119               ; Horizontal line top side for C64
+HLINE2SYMBOL        = 111               ; Horizontal line bottom side for C64
+.endif
+.if PET
+HLINE1SYMBOL        = 99                ; Horizontal line top side for PET
+HLINE2SYMBOL        = 100               ; Horizontal line bottom side for PET
+.endif
 MEDIUMSHADE         = 45                ; Symbol for an empty VU square
 VUSYMBOL            = 244               ; Symbol for a filled VU square
 
