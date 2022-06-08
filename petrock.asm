@@ -1572,13 +1572,23 @@ SetNextStyle:   lda NextStyle         ; Take the style index and multiply by 2
 ; of height 1 are also specified.
 
 SkinnyRoundStyle:                     ; PETSCII screen codes for round tube bar style
+.if C64
   .byte 85, 73, 74, 75, 66, 66, 74, 75, 32, 32
+.endif
+.if PET
+  .byte 85, 73, 74, 75, 93, 93, 74, 75, 32, 32
+.endif
 
 DrawSquareStyle:                      ; PETSCII screen codes for square linedraw style
   .byte 79, 80, 76, 122, 101, 103, 76, 122, 32, 32
 
 BreakoutStyle:                        ; PETSCII screen codes for style that looks like breakout
+.if C64
   .byte 239, 250, 239, 250, 239, 250, 239, 250, 239, 250
+.endif
+.if PET
+  .byte 228, 250, 228, 250, 228, 250, 228, 250, 228, 250
+.endif
 
 CheckerboardStyle:                    ; PETSCII screen codes for checkerboard style
   .byte 102, 92, 102, 92, 102, 92,102, 92, 102, 92
