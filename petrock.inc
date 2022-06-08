@@ -73,7 +73,7 @@ DATA_LEN            = 8       ; Size of Data portion
 VU_LEN              = 1       ; Size of VU
 PACKET_LENGTH       = MAGIC_LEN + DATA_LEN + VU_LEN + 1 ; NUL terminated so +1
         
-; Screen color codes
+.if C64             ; Screen color codes and baud rates for C64
 
 BLACK               = 0
 WHITE               = 1
@@ -97,11 +97,16 @@ BAUD1200            = 4
 BAUD2400            = 2
 BAUD4800            = 0
 
+.endif
+
 ; Includes --------------------------------------------------------------------------
 
     .include        "cbm_kernal.inc"
+
+.if C64             ; Currently only pull in serial includes for C64
     .include        "ser-kernel.inc"
     .include        "ser-error.inc"
+.endif 
 
 ; System Definition -----------------------------------------------------------------
 
