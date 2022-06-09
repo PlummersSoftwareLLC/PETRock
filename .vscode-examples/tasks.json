@@ -36,6 +36,37 @@
             "dependsOn":[
                 "Build for C64"
             ]
+        },
+        {
+            "label": "Build for PET",
+            "type": "shell",
+            "command": "cl65 --verbose  -debug --debug-info --listing petrock.lst --mapfile petrock.map  --asm-define PET=1 -o petrock.prg -t none ${file}",
+            "args": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "clear": true
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Run on PET",
+            "type": "shell",
+            "command": "xpet petrock.prg ",
+            "args": [],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "clear": true
+            },
+            "problemMatcher": "$msCompile",
+            "dependsOn":[
+                "Build for PET"
+            ]
         }
 
     ]
