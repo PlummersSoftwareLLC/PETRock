@@ -133,6 +133,18 @@ endOfBasic:     .word 00              ;   the +7 expression above, as this is
 ;-----------------------------------------------------------------------------------
 
 start:          
+.if PET
+                lda PET_DETECT        ; Check if we're dealing with original ROMs
+                cmp #PET_2000
+                bne @goodpet
+
+                ldy #>notonoldrom     ; Disappoint user
+                lda #<notonoldrom
+                jsr WriteLine
+
+                rts
+@goodpet:
+.endif
 
 .if C64         ; Serial only for C64
                 jmp realStart
@@ -300,12 +312,12 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 jmp drawLoop
 
 @notborder:     cmp #$03
-                beq @exit
+                beq exit
                 
                 jsr ShowHelp
                 jmp drawLoop
 
-@exit:
+exit:
 .if C64         ; Color only available on C64
                 lda BorderColor       ; Restore colors to how we found them
                 sta VIC_BORDERCOLOR
@@ -1645,6 +1657,10 @@ RWBScheme:      .byte 3
 ; String literals at the end of file, as was the style at the time!
 
 .include "fakedata.inc"
+
+.if PET
+notonoldrom:    .literal "SORRY, NO PETROCKING ON ORIGINAL ROMS.", 13, 0
+.endif
 
 startstr:       .literal "STARTING...", 13, 0
 exitstr:        .literal "EXITING...", 13, 0
