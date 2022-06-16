@@ -312,12 +312,12 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 jmp drawLoop
 
 @notborder:     cmp #$03
-                beq exit
+                beq @exit
                 
                 jsr ShowHelp
                 jmp drawLoop
 
-exit:
+@exit:
 .if C64         ; Color only available on C64
                 lda BorderColor       ; Restore colors to how we found them
                 sta VIC_BORDERCOLOR
