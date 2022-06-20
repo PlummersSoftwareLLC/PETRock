@@ -248,7 +248,7 @@ ser_nmi64:
         tax             ; these must be serviced
         lsr             ; timer a? (bit 0)
         bcc @ckflag     ; no
-        lda CIA2_PRA    ; yes, put but on pin m
+        lda CIA2_PRA    ; yes, put bit on pin m
         and #$fb
         ora NXTBIT
         sta CIA2_PRA
