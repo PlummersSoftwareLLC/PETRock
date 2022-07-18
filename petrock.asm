@@ -272,9 +272,10 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
 
                 jsr CheckTextTimer
 
+.if C64         ; Color's only relevant on the C64
                 lda #'*'              ; Send a * back to the host
                 jsr PutSerialChar
-
+.endif
                 jsr GETIN             ; Keyboard Handling - check for RUN
 
                 cmp #0
