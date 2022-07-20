@@ -535,7 +535,7 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
                 lda VIA_PA1
                 jmp @exit
 
-@tim2retrig:    ldx BAUD              ;3;
+@tim2retrig:    ldx #BAUD             ;3;
                 lda Tim2BaudLo,X      ;4;
                 sta VIA_T2CL          ;4;
                 lda Tim2BaudHi,X      ;4;
@@ -588,7 +588,7 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
                 ; We hit a start bit, set up TIM2
                 ; We want the first event to be in 1@5 periods
                 ; And enable tim2 interrupt
-                ldx BAUD
+                ldx #BAUD
                 lda BaudTblLo,X
                 sta VIA_T2CL
                 lda BaudTblHi,X
