@@ -23,10 +23,11 @@ The built-in serial code on the C64 is poor, and [serdrv.s](serdrv.s) contains a
 In the [`settings.inc`](settings.inc) file, a number of symbols are defined that can be used to configure the build:
 |Name|Possible values|Mandatory|Meaning|
 |-|-|-|-|
+|BSNSS_KBD|0 or 1|Yes, on the PET|Set to 0 to indicate your PET has a graphical keyboard. Set to 1 to indicate it has a business keyboard.|
 |C64|0 or 1|No|Configure build for the Commodore 64. Exactly one of C64 or PET **must** be defined to equal 1.|
 |DEBUG|0 or 1|Yes|Set to 1 to enable code that only is included for debug builds.|
 |PET|0 or 1|No|Configure build for the PET. Exactly one of C64 or PET **must** be defined to equal 1.|
-|SERIAL|0 or 1|Yes|Set to 1 to read visualisation data from 
+|SERIAL|0 or 1|Yes|Set to 1 to read visualisation data from the user port
 |TIMING|0 or 1|Yes|Set to 1 to show timing information concerning the drawing of spectrum analyzer updates. Only supported on the C64 and has not been used for a while, so may need some attention to make it work.|
 
 Note that the PET and C64 symbols are not set by default. The reason is that the assembly target is a prime candidate to be set via the command line. Also, on the PET only the demo mode (see below) currently works. The reason is that we're still looking for suitable serial code for audio data ingestion on the PET.

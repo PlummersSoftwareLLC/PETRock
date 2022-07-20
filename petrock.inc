@@ -103,8 +103,11 @@ BAUD4800            = 0
 
     .include        "cbm_kernal.inc"
 
-.if C64             ; Currently only pull in serial includes for C64
+.if SERIAL
+  .if C64           ; Currently only pull in serial kernal includes for C64
     .include        "ser-kernel.inc"
+  .endif
+                    ; Error code includes also used by PET driver
     .include        "ser-error.inc"
 .endif 
 

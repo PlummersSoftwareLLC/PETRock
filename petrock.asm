@@ -86,9 +86,9 @@ ScratchStart:
 
 .if SERIAL                                ; Include serial driver variables
   .if C64
-.include "c64/serdrv.var"
+.include "serial/c64/vars.s"
   .elseif PET
-.include "pet/serdrv.var"
+.include "serial/pet/vars.s"
   .endif
 .endif
 
@@ -154,9 +154,9 @@ start:
                 jmp realStart
 
   .if C64
-.include "c64/serdrv.s"
+.include "serial/c64/driver.s"
   .elseif PET
-.include "pet/serdrv.s"
+.include "serial/pet/driver.s"
   .endif
 
 realStart:
@@ -193,8 +193,7 @@ realStart:
 .endif
 .if SERIAL
                 jsr OpenSerial        ; Open the serial port for data from the ESP32   
-                lda #2                ; Could just be non-zero, but might be device ID!
-                jsr SerialIoctl       ; Enable Serial!  Behold the power!
+                jsr StartSerial       ; Enable Serial!  Behold the power!
 .endif
 
 drawLoop:       

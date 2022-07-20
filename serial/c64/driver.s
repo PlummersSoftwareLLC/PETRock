@@ -179,15 +179,10 @@ PutSerialChar:
         rts
 
 ;-----------------------------------------------------------------------------------
-; SerialIoctl: Pass 0 in A to disable serial, 2 to enable
+; StartSerial: Start serial communication. OpenSerial must have been called already.
 ;-----------------------------------------------------------------------------------
 
-SerialIoctl:
-        cmp #0
-        beq @disable
-        jmp ser_enable
-@disable:
-        jmp ser_disable
+StartSerial     = ser_enable
 
 ;-----------------------------------------------------------------------------------
 ; CloseSerial: Teardown serial comms. We just disable it.
@@ -196,7 +191,7 @@ SerialIoctl:
 CloseSerial     = ser_disable
 
 ;-----------------------------------------------------------------------------------
-; GetKeybiardChar: Get a character from the keyboard. In this case, just use GETIN
+; GetKeyboardChar: Get a character from the keyboard. In this case, just use GETIN
 ;-----------------------------------------------------------------------------------
 
 GetKeyboardChar = GETIN
