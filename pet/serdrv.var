@@ -1,0 +1,41 @@
+; This file is virtually positioned at some address
+; Nothing can be initialized here, just reserving addresses
+
+SERCNT:	.res	1		; Current sample number
+TXCUR:	.res	1		; Current byte being transmitted
+RXCUR:	.res	1		; Current byte being received
+TXSTATE:	.res	1		; Next Transmit state
+TXBIT:	.res	1		; Tx data bit #
+RXBIT:	.res	1		; Rx data bit #
+
+TXBYTE:	.res	1		; Next byte to transmit
+TXNEW:	.res	1		; Indicates to start sending a byte
+
+TMP1:	.res	1
+TMP2:	.res	1
+
+CNT:	.res	1
+
+POLLRES:	.res	1		; KBD Polling interval for baud
+POLLTGT:	.res	1		; Polling interval counter
+
+KBDBYTE:	.res	1
+KBDNEW:	.res	1
+KEY:	.res	1
+SHIFT:	.res	1
+CTRL:	.res	1
+
+KROW:	.res	1		; Temp variables for split/fast key scanning
+KROWFND:	.res	1
+KBITFND:	.res	1
+
+KEYOFF:	.res	1		; Keyboard matrix offset for shift
+KBDTMP:	.res 	1		; Keyboard scanning temp, to allow BIT instruction
+
+RXBUFW:	.res	1		; Write pointer
+RXBUFR:	.res	1		; Read pointer
+KFAST:	.res	1		; 0 if slow/normal scanning, 1 for fast split scanning
+
+IRQB4LO DS.B	1		; Hardware interrupt lo byte for BASIC 2/4
+IRQB4HI:	.res	1		; Hardware interrupt hi byte for BASIC 2/4
+EXITFLG:	.res	1		; Exit flag

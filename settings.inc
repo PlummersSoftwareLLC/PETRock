@@ -1,5 +1,6 @@
 DEBUG           = 0       ; Enable code that only is included for debug builds
 TIMING          = 0       ; Change border color to show drawing progress. Only supported on the C64
+SERIAL          = 1       ; Enable reading serial input from user port
 
 ; --- Uncomment one of the following two lines to select the build target.
 ;     Alternatively, either symbol can be defined using the ca65/cl65 command line.

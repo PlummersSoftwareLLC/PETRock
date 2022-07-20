@@ -84,8 +84,12 @@ ScratchStart:
 .endif
     DemoToggle:      .res  1              ; Update toggle to delay demo mode updates
 
-.if C64         ; Serial only for C64
-.include "serdrv.var"                     ; Include serial driver variables
+.if SERIAL                                ; Include serial driver variables
+  .if C64
+.include "c64/serdrv.var"
+  .elseif PET
+.include "pet/serdrv.var"
+  .endif
 .endif
 
 ScratchEnd: 
@@ -146,12 +150,14 @@ start:
 @goodpet:
 .endif
 
-.if C64         ; Serial only for C64
+.if SERIAL
                 jmp realStart
 
-.include "serdrv.s"                   ; Include serial driver routines here, so
-                                      ;   they're available from this point
-                                      ;   onwards
+  .if C64
+.include "c64/serdrv.s"
+  .elseif PET
+.include "pet/serdrv.s"
+  .endif
 
 realStart:
 .endif
@@ -182,19 +188,18 @@ realStart:
                 jsr EmptyBorder       ; Draw the screen frame and decorations
                 jsr SetNextStyle      ; Select the first visual style
 
-.if C64         ; Color and serial only supported on C64
+.if C64         ; Color only supported on C64
                 jsr FillBandColors    ; Do initial fill of band color RAM
-
+.endif
+.if SERIAL
                 jsr OpenSerial        ; Open the serial port for data from the ESP32   
                 lda #2                ; Could just be non-zero, but might be device ID!
-                ldy #0                ;   Either way, zero is disable, we want the opposite
-                ldx #0
                 jsr SerialIoctl       ; Enable Serial!  Behold the power!
 .endif
 
 drawLoop:       
 
-.if C64         ; Serial only on C64
+.if SERIAL
                 jsr GetSerialChar
                 cmp #$ff              ; If byte is $ff, check if "no data" was flagged
                 bne @havebyte
@@ -272,11 +277,13 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
 
                 jsr CheckTextTimer
 
-.if C64         
+.if SERIAL
                 lda #'*'              ; Send a * back to the host
                 jsr PutSerialChar
+                jsr GetKeyboardChar   ; Get a character from the serial driver's keyboard handler
+.else
+                jsr GETIN             ; No serial, use regular GETIN routine
 .endif
-                jsr GETIN             ; Keyboard Handling - check for RUN
 
                 cmp #0
                 bne @notEmpty
@@ -319,6 +326,10 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 jmp drawLoop
 
 @exit:
+.if SERIAL
+                jsr CloseSerial
+.endif
+
 .if C64         ; Color only available on C64
                 lda BorderColor       ; Restore colors to how we found them
                 sta VIC_BORDERCOLOR
@@ -441,7 +452,7 @@ ClrBorderMem:   ldy #XSIZE-1          ; Top line
 
                 rts
 
-.if C64         ; Serial only supported on C64
+.if SERIAL
 
 ;-----------------------------------------------------------------------------------
 ; GotSerial     Process incoming serial bytes from the ESP32 
@@ -523,7 +534,7 @@ GotSerialPacket:
                 bne :-                    ; Repeat until we have
                 rts
 
-.endif          ; C64
+.endif          ; SERIAL
 
 ;-----------------------------------------------------------------------------------
 ; FillPeaks
@@ -691,6 +702,7 @@ WLRaw:          ldy #0
 ;-----------------------------------------------------------------------------------
 ; ShowHelp      Show help text
 ;-----------------------------------------------------------------------------------
+
 ShowHelp:
                 lda #0
                 ldx #<EmptyText
@@ -1482,7 +1494,7 @@ CheckTextTimer:
                 jmp ClearTextBlock
 .endif
 
-.if PET         ; Decrease countdown timer until we reach $0000
+.if PET         ; Decrease countdown timer until we reach $00
                 dec TextCountDown
                 bne @done
 

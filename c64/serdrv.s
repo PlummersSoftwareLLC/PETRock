@@ -132,7 +132,6 @@ OpenSerial:
 ; If no data is available, SER_ERR_NO_DATA is returned in X/Y.
 ;-----------------------------------------------------------------------------------
 
-
 GetSerialChar:   
         ldx #RS232_DEV
         jsr CHKIN
@@ -179,22 +178,28 @@ PutSerialChar:
         jsr CLRCH
         rts
 
-
 ;-----------------------------------------------------------------------------------
 ; SerialIoctl: Pass 0 in A to disable serial, 2 to enable
 ;-----------------------------------------------------------------------------------
 
 SerialIoctl:
-      cmp #0
-      beq @disable
-@enable:
-      jsr ser_enable
-      sec
-      bcs @exit
+        cmp #0
+        beq @disable
+        jmp ser_enable
 @disable:
-      jsr ser_disable 
-@exit:
-      rts
+        jmp ser_disable
+
+;-----------------------------------------------------------------------------------
+; CloseSerial: Teardown serial comms. We just disable it.
+;-----------------------------------------------------------------------------------
+
+CloseSerial     = ser_disable
+
+;-----------------------------------------------------------------------------------
+; GetKeybiardChar: Get a character from the keyboard. In this case, just use GETIN
+;-----------------------------------------------------------------------------------
+
+GetKeyboardChar = GETIN
 
 ;-----------------------------------------------------------------------------------
 
