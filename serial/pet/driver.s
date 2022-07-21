@@ -264,7 +264,7 @@ SendBit:
                 sta TxState
                 rts
                 ; Send stop bit
-@stopbit:        lda #1
+@stopbit:       lda #1
                 jsr SetTxPin          ; Send stop bit
                 lda #ST_READY
                 sta TxState
@@ -524,7 +524,6 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
 
                 inc RxBufWritePtr
 
-
                 lda #$22              ; Disable timer 2 interrupt and CA1
                 sta VIA_IER
                 lda #$82              ; Enable CA1 interrupt
@@ -548,9 +547,9 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
                 bne @fastkbd
 
                 ;"Slow" keyboard polling (all rows at once)
-                dec KbdPollCnt           ; Check if we're due to poll
+                dec KbdPollCnt        ; Check if we're due to poll
                 bne @exit
-                lda KbdPollIntrvl           ; Reset keyboard poll count
+                lda KbdPollIntrvl     ; Reset keyboard poll count
                 sta KbdPollCnt
 
                 jsr PollKeyboard      ; Do keyboard polling
@@ -570,7 +569,7 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
                 jmp @exit
 
 @final:         lda KbdPollIntrvl
-                sta KbdPollCnt           ; Reset polling counter
+                sta KbdPollCnt        ; Reset polling counter
                 jsr ConvertKbdRow
 
 @keyend:        cmp KbdByte           ; Check if same byte as before
@@ -618,10 +617,10 @@ BaudTblLo:      .byte $83, $05, $83, $41, $A1, $D0, $68
 BaudTblHi:      .byte $23, $0D, $06, $03, $01, $00, $00
 
                 ; Poll interval mask for ~60Hz keyboard polling based on the baud timer
-                ;   110  300  600 1200 2400 4800  9600 (Baud)
+                ;      110  300  600 1200 2400 4800 9600 (Baud)
 KbdPollIntTbl:     .byte 2,   5,  10,  20,  40,  80, 160
-   ;Poll freq Hz     55   60   60   60   60   60   60
-                ;If KbdPollIntrvl value is below 12 we need to use the all at once keyboard scan
+      ; Poll freq Hz    55   60   60   60   60   60   60
+                ; If KbdPollIntrvl value is below 12 we need to use the all at once keyboard scan
 
                 ; Timer 2 isn't freerunning so we have to subtract the cycles till we reset
                 ; it from the rate (- $5D)
