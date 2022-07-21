@@ -123,20 +123,18 @@ Line2:          .word Line3
 Line3:          .word endOfBasic       ; PTR to next line, which is 0000
                 .word 3               ; Line Number 20
                 .byte TK_SYS          ;   SYS token
-                .literal " "
-                .literal .string(*+7) ; Entry is 7 bytes from here, which
-                                      ;  not how I'd like to do it but you cannot
-                                      ;  use a forward reference in STR$()
+                .literal .sprintf(" %d", PROGRAM)
 
-                .byte 00              ; Do not modify without understanding
-endOfBasic:     .word 00              ;   the +7 expression above, as this is
-                                      ;   exactly 7 bytes and must match it
+                .byte 00
+endOfBasic:     .word 00
+
 
 ;-----------------------------------------------------------------------------------
 ; Start of Assembly Code
 ;-----------------------------------------------------------------------------------
 
-start:          
+                .org PROGRAM
+
 .if PET
                 lda PET_DETECT        ; Check if we're dealing with original ROMs
                 cmp #PET_2000
@@ -151,7 +149,8 @@ start:
 .endif
 
 .if SERIAL
-                jmp realStart
+
+                jmp start
 
   .if C64
 .include "serial/c64/driver.s"
@@ -159,9 +158,9 @@ start:
 .include "serial/pet/driver.s"
   .endif
 
-realStart:
 .endif
 
+start:
                 cld                   ; Turn off decimal mode
 
 .if C64         ; TOD clocks only on C64

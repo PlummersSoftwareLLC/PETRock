@@ -29,6 +29,7 @@
     .include            "c64.inc"
 
     BASE                = $0801     ; C64 Start of BASIC
+    PROGRAM             = $0900     ; Start of actual program
                 
     zptmp               = $FB
     zptmpB              = $FD
@@ -50,6 +51,8 @@
     .include "pet.inc"
 
     BASE                = $0401     ; PET Start of BASIC
+    RX_BUF              = $0500     ; Circular buffer for serial input (256 bytes)
+    PROGRAM             = $0600     ; Start of actual program
 
     zptmp               = $BD
     zptmpB              = $00

@@ -8,8 +8,6 @@ ST_IDLE         = 4
 
 BITCOUNT        = 8                   ; 8-bit bytes to recieve
 
-RX_BUF          = $0300               ; Ring buffer of recieved chars
-
 ; 6520 PIAs - Not in CC65 pet.inc
 PIA1_PA         = $E810
 PIA1_PB         = $E812
