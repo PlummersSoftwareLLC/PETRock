@@ -131,11 +131,11 @@ Line3:          .word endOfBasic       ; PTR to next line, which is 0000
 endOfBasic:     .word 00
 
 
+.res            PROGRAM - *
+
 ;-----------------------------------------------------------------------------------
 ; Start of Assembly Code
 ;-----------------------------------------------------------------------------------
-
-                .org PROGRAM
 
 .if PET
                 lda PET_DETECT        ; Check if we're dealing with original ROMs

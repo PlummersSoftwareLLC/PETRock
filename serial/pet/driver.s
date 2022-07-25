@@ -687,12 +687,12 @@ KbdMatrixShift: .byte '>', $0E, $F4, '8', '=', '(', '%', '"'    ;" ;$8E = BothSh
                 ; Matrix for Graphics keyboards
 KbdMatrix:      .byte $F3, $F0, $5F, '(', '&', '%', '#', '!'
                 .byte $08, $F2, $EF, ')', '\', "'", '$', '"'    ;" ; (Appease the syntax highlighter)
-                .byte '9', '7', '^', 'o', 'u', 't', 'e', 'q'
-                .byte '/', '8', $EF, 'p', 'i', 'y', 'r', 'w'
-                .byte '6', '4', $EF, 'l', 'j', 'g', 'd', 'a'
-                .byte '*', '5', $EF, ':', 'k', 'h', 'f', 's'
-                .byte '3', '1', $0D, ';', 'm', 'b', 'c', 'z'
-                .byte '+', '2', $EF, '?', ',', 'n', 'v', 'x'
+                .byte '9', '7', '^', 'O', 'U', 'T', 'E', 'Q'
+                .byte '/', '8', $EF, 'P', 'I', 'Y', 'R', 'W'
+                .byte '6', '4', $EF, 'L', 'J', 'G', 'D', 'A'
+                .byte '*', '5', $EF, ':', 'K', 'H', 'F', 'S'
+                .byte '3', '1', $0D, ';', 'M', 'B', 'C', 'Z'
+                .byte '+', '2', $EF, '?', ',', 'N', 'V', 'X'
                 .byte '-', '0', $00, '>', $FF, ']', '@', $00
                 .byte '=', '.', $EF, $03, '<', ' ', '[', $FF
 
@@ -710,12 +710,12 @@ CtrlMask:       .byte $00, $00, $00, $00, $00, $00, $00, $00, $08, $01
                 ; Matrix for Graphics keyboards
 KbdMatrixShift: .byte $F4, $F0, $5F, '(', '&', '%', '#', '!'
                 .byte $08, $F1, $EF, ')', '\', '`', '$', '"'   ;";
-                .byte '9', '7', '|', 'O', 'U', 'T', 'E', 'Q'
-                .byte '/', '8', $EF, 'P', 'I', 'Y', 'R', 'W'
-                .byte '6', '4', $EF, 'L', 'J', 'G', 'D', 'A'
-                .byte '*', '5', $EF, ':', 'K', 'H', 'F', 'S'
-                .byte '3', '1', $0D, ';', 'M', 'B', 'C', 'Z'
-                .byte '+', '2', $EF, '?', ',', 'N', 'V', 'X'
+                .byte '9', '7', '|', $CF, $D5, $D4, $C5, $D1
+                .byte '/', '8', $EF, $D0, $C9, $D9, $D2, $D7
+                .byte '6', '4', $EF, $CC, $CA, $C7, $C4, $C1
+                .byte '*', '5', $EF, ':', $CB, $C8, $C6, $D3
+                .byte '3', '1', $0D, ';', $CD, $C2, $C3, $DA
+                .byte '+', '2', $EF, '?', ',', $CE, $D6, $D8
                 .byte '-', '0', $00, '>', $FF, '}', '~', $00
                 .byte '=', '.', $EF, $03, '<', ' ', '{', $FF
 
