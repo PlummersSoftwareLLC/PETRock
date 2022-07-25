@@ -68,9 +68,6 @@ ScratchStart:
     Peaks:           .res  NUM_BANDS      ; Peak Data for current frame
     NextStyle:       .res  1              ; The next style we will pick
     CharDefs:        .res  VISUALDEF_SIZE ; Storage for the visualDef currently in use
-    SerialBufPos:    .res  1              ; Current index into serial buffer
-    SerialBuf:       .res  PACKET_LENGTH  ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
-    SerialBufLen = *-SerialBuf            ; Length of Serial Buffer
     DemoMode:        .res  1              ; Demo mode enabled
 .if C64         ; Color's only relevant on the C64
     CurSchemeIndex:  .res  1              ; Current band color scheme index
@@ -83,8 +80,10 @@ ScratchStart:
     TextCountDown:   .res  1              ; Text timeout countdown timer
 .endif
     DemoToggle:      .res  1              ; Update toggle to delay demo mode updates
-
 .if SERIAL                                ; Include serial driver variables
+    SerialBufPos:    .res  1              ; Current index into serial buffer
+    SerialBuf:       .res  PACKET_LENGTH  ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
+    SerialBufLen = *-SerialBuf            ; Length of Serial Buffer
   .if C64
 .include "serial/c64/vars.s"
   .elseif PET
@@ -95,7 +94,10 @@ ScratchStart:
 ScratchEnd: 
 
 .assert * <= SCRATCH_END, error           ; Make sure we haven't run off the end of the buffer
+
+.if SERIAL
 .assert SerialBufLen = PACKET_LENGTH, error
+.endif
 
 ; Start of Binary -------------------------------------------------------------------
 
