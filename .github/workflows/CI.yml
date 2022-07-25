@@ -22,7 +22,21 @@ jobs:
         git checkout 6ac4aa4e2076189ad5b5f3a9d33e1c5910d4e37c
         make
 
-    - name: "Assemble PETRock"
+    - name: "Remove SERIAL from settings.inc and rename"
+      run: 
+        grep -v SERIAL settings.inc > settings.new
+        rm settings.inc
+
+    - name: "Assemble PETRock without serial support"
       run: | 
-          cc65/bin/cl65 --verbose  --asm-define PET=1 -o petrock.prg -t none petrock.asm
-          cc65/bin/cl65 --verbose  --asm-define C64=1 -o c64rock.prg -t none petrock.asm
+        cp -f settings.new settings.inc
+        echo "SERIAL=0" >> settings.inc
+        cc65/bin/cl65 --verbose  --asm-define PET=1 -o petrock.prg -t none petrock.asm
+        cc65/bin/cl65 --verbose  --asm-define C64=1 -o c64rock.prg -t none petrock.asm
+
+    - name: "Assemble PETRock with serial support"
+      run: | 
+        cp -f settings.new settings.inc
+        echo "SERIAL=1" >> settings.inc
+        cc65/bin/cl65 --verbose  --asm-define PET=1 -o petrockser.prg -t none petrock.asm
+        cc65/bin/cl65 --verbose  --asm-define C64=1 -o c64rockser.prg -t none petrock.asm
