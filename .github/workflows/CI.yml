@@ -23,7 +23,7 @@ jobs:
         make
 
     - name: "Remove SERIAL from settings.inc and rename"
-      run: 
+      run: |
         grep -v SERIAL settings.inc > settings.new
         rm settings.inc
 
