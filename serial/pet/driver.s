@@ -232,9 +232,9 @@ GetKeyboardChar:
                 bne @keypressed
                 rts                   ; Return 0 to indicate no key was pressed
 
-@keypressed:    lda #0
-                sta KbdNewFlag        ; Acknowledge key press
-                lda KbdByte           ; Load character that was pressed
+@keypressed:    lda KbdByte           ; Load character that was pressed
+                ldx #0
+                stx KbdNewFlag        ; Acknowledge key press
                 rts
 
 ;-----------------------------------------------------------------------
