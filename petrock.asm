@@ -79,7 +79,9 @@ ScratchStart:
 .if PET         ; Rudimentary approach for PET. The C64 uses a CIA timer
     TextCountDown:   .res  1              ; Text timeout countdown timer
 .endif
+.if .not (PET && SERIAL)
     DemoToggle:      .res  1              ; Update toggle to delay demo mode updates
+.endif
 .if SERIAL                                ; Include serial driver variables
     SerialBufPos:    .res  1              ; Current index into serial buffer
     SerialBuf:       .res  PACKET_LENGTH  ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
@@ -226,7 +228,11 @@ drawLoop:
                 beq @dovu
                 jsr FillPeaks
                 ldx #$08
-                jsr Delay
+                ldy #$ff
+@delay:         dey
+                bne @delay
+                dex
+                bne @delay
 @dovu:          jsr DrawVU            ; Draw the VU bar at the top of the screen
 
 .if TIMING && C64                     ; If 'TIMING' is defined we turn the border
@@ -346,13 +352,6 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
 
                 rts
 
-Delay:          ldy #$FF
-:               dey
-                bne :-
-                dex
-                bne Delay
-                rts
-                
 ;-----------------------------------------------------------------------------------
 ; ToggleBorder - Toggle border around spectrum analyzer area
 ;-----------------------------------------------------------------------------------
@@ -543,14 +542,18 @@ GotSerialPacket:
 ; and vu value
 ;-----------------------------------------------------------------------------------
 
-FillPeaks:      lda DemoToggle
+FillPeaks:      
+.if .not (PET && SERIAL)
+                lda DemoToggle
                 eor #$01
                 sta DemoToggle
                 beq @proceed
 
                 rts
 
-@proceed:       tya
+@proceed:       
+.endif
+                tya
                 pha
                 txa
                 pha
