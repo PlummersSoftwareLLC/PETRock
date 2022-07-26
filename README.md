@@ -30,7 +30,7 @@ In the [`settings.inc`](settings.inc) file, a number of symbols are defined that
 |SERIAL|0 or 1|Yes|Set to 1 to read visualisation data from the user port
 |TIMING|0 or 1|Yes|Set to 1 to show timing information concerning the drawing of spectrum analyzer updates. Only supported on the C64 and has not been used for a while, so may need some attention to make it work.|
 
-Note that the PET and C64 symbols are not set by default. The reason is that the assembly target is a prime candidate to be set via the command line. Also, on the PET only the demo mode (see below) currently works. The reason is that we're still looking for suitable serial code for audio data ingestion on the PET.
+Note that the PET and C64 symbols are not set by default. The reason is that the assembly target is a prime candidate to be set via the command line.
 
 This repository's code targets the ca65 assembler and cl65 linker that are part of the [cc65](https://cc65.github.io/) GitHub project. You will need a fairly recent build of cc65 for assembly of this repository's contents to work. If you receive errors about the .literal mnemonic, this is the likely reason.
 

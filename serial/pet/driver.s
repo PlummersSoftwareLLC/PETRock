@@ -243,7 +243,7 @@ SendBit:
                 lda #ST_READY
                 sta TxState
                 rts
-@databit:  ; Send data bit
+@databit:       ; Send data bit
                 lda #0
                 ror TxCurByte         ; Rotate current bit into carry
                 rol                   ; Place into A

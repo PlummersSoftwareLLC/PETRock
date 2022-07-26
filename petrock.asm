@@ -68,6 +68,7 @@ ScratchStart:
     Peaks:           .res  NUM_BANDS      ; Peak Data for current frame
     NextStyle:       .res  1              ; The next style we will pick
     CharDefs:        .res  VISUALDEF_SIZE ; Storage for the visualDef currently in use
+    RedrawFlag:      .res  1              ; Flag to redraw screen
     DemoMode:        .res  1              ; Demo mode enabled
 .if C64         ; Color's only relevant on the C64
     CurSchemeIndex:  .res  1              ; Current band color scheme index
@@ -225,7 +226,7 @@ drawLoop:
 .endif
 
 @donedata:      lda DemoMode          ; Load demo data if demo mode is on
-                beq @dovu
+                beq @redraw
                 jsr FillPeaks
                 ldx #$08
                 ldy #$ff
@@ -233,22 +234,34 @@ drawLoop:
                 bne @delay
                 dex
                 bne @delay
-@dovu:          jsr DrawVU            ; Draw the VU bar at the top of the screen
+
+@redraw:        lda RedrawFlag
+                beq @afterdraw        ; We didn't get a complete packet yet, so no point in drawing anything
+                lda #0 
+                sta RedrawFlag        ; Acknowledge packet
+
+                jsr DrawVU            ; Draw the VU bar at the top of the screen
 
 .if TIMING && C64                     ; If 'TIMING' is defined we turn the border
                 lda #LIGHT_GREY       ;  color to different colors at particular
                 sta VIC_BORDERCOLOR   ;  places in the draw code to help see how
 .endif                                ;  long various parts of it are taking.
 
-drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
+                ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
 :
                 lda Peaks, x          ; X = band numner, A = value
                 jsr DrawBand
                 dex
                 bpl :-
-                ; Check to see its time to scroll the color memory
+
+.if SERIAL
+                lda #'*'              ; Send a * back to the host
+                jsr PutSerialChar
+.endif
 
 .if TIMING && C64
+                ; Check to see its time to scroll the color memory
+
                 lda #BLACK
                 sta VIC_BORDERCOLOR
 :               bit RASTHI
@@ -281,11 +294,9 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 jsr CHROUT
 .endif          ; TIMING && C64
 
-                jsr CheckTextTimer
+@afterdraw:     jsr CheckTextTimer
 
 .if SERIAL
-                lda #'*'              ; Send a * back to the host
-                jsr PutSerialChar
                 jsr GetKeyboardChar   ; Get a character from the serial driver's keyboard handler
 .else
                 jsr GETIN             ; No serial, use regular GETIN routine
@@ -477,7 +488,7 @@ GotSerial:      ldy SerialBufPos
 :               cpy SerialBufPos          ; Are we in the right char pos for it?
                 beq :+                    ;  Yep - Process packet
                 ldy #0                    ;  Nope - Restart filling buffer
-                sta SerialBufPos
+                sty SerialBufPos
                 beq @done
 
 :               jsr GotSerialPacket
@@ -531,6 +542,9 @@ GotSerialPacket:
 
                 cpy #8                    ; Have we done bytes 0-3 yet?
                 bne :-                    ; Repeat until we have
+
+                lda #1
+                sta RedrawFlag            ; Time to redraw!
                 rts
 
 .endif          ; SERIAL
@@ -587,9 +601,13 @@ FillPeaks:
                 lda (zptmpB), y
                 sta VU
 
+                lda #1
+                sta RedrawFlag        ; Time to redraw!
+
                 inc DataIndex         ; Inc DataIndex - Assumes wrap, so if you
                                       ;   have exacly 256 bytes, you'd need to
                                       ;   check and fix that here
+
                 pla
                 tax
                 pla
@@ -609,6 +627,9 @@ InitVariables:  ldx #ScratchEnd-ScratchStart
                 dex
                 cpx #$ff
                 bne :-
+
+                lda #1
+                sta RedrawFlag
 
                 rts
 
@@ -630,6 +651,9 @@ SwitchDemoMode: lda DemoMode          ; Toggle demo mode bit
                 bpl :-
 
                 sta VU
+
+                lda #1
+                sta RedrawFlag        ; Force redraw
 
                 ldx #<DemoOffText     ; Tell user what just happened
                 ldy #>DemoOffText
