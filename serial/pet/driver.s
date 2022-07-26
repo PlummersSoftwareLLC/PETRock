@@ -72,6 +72,16 @@ OpenSerial:
                 sta VIA_T1CH          ; Need to clear high before writing latch
                                       ; Otherwise it seems to fail half the time?
 
+                ldx #BAUD             ; Set up timers based on BAUD
+                lda BaudTblLo,X       ; Set interrupt timer
+                sta VIA_T1LL
+                lda BaudTblHi,X
+                sta VIA_T1LH
+
+                lda KbdPollIntTbl,X   ; Set keyboard polling interval based
+                sta KbdPollIntrvl     ; on current baud/timer rate
+                sta KbdPollCnt
+
                 cli
                 rts
 
@@ -113,16 +123,6 @@ PutSerialChar:
 ;-----------------------------------------------------------------------------------
 
 StartSerial:
-                ldx #BAUD             ; Set up timers based on BAUD
-                lda BaudTblLo,X       ; Set interrupt timer
-                sta VIA_T1LL
-                lda BaudTblHi,X
-                sta VIA_T1LH
-
-                lda KbdPollIntTbl,X   ; Set keyboard polling interval based
-                sta KbdPollIntrvl     ; on current baud/timer rate
-                sta KbdPollCnt
-
                 lda #0
                 sta RxBufWritePtr
                 sta RxBufReadPtr
