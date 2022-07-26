@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/PlummersSoftwareLLC/PETRock/actions/workflows/CI.yml/badge.svg)](https://github.com/PlummersSoftwareLLC/PETRock/actions/workflows/CI.yml)
 
-A spectrum analyzer display for the C64 that receives its data from an ESP32 MCU on the user port that does the audio processing, FFT, etc.
+A spectrum analyzer display for the C64 and the PET that receives its data from an ESP32 MCU on the user port that does the audio processing, FFT, etc.
 
 ## General Idea for Newcomers
 
