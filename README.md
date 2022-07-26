@@ -30,7 +30,8 @@ In the [`settings.inc`](settings.inc) file, a number of symbols are defined that
 |C64|0 or 1|No|Configure build for the Commodore 64. Exactly one of C64 or PET **must** be defined to equal 1.|
 |DEBUG|0 or 1|Yes|Set to 1 to enable code that only is included for debug builds.|
 |PET|0 or 1|No|Configure build for the PET. Exactly one of C64 or PET **must** be defined to equal 1.|
-|SERIAL|0 or 1|Yes|Set to 1 to read visualisation data from the user port
+|SENDSTAR|0 or 1|Yes, on the PET with SERIAL enabled|Set to 1 to send a * after each screen redraw on the PET when SERIAL is enabled. This will create clicking noises on PETs with a piezo speaker installed. This setting is ignored on the C64.|
+|SERIAL|0 or 1|Yes|Set to 1 to read visualisation data from the user port.|
 |TIMING|0 or 1|Yes|Set to 1 to show timing information concerning the drawing of spectrum analyzer updates. Only supported on the C64 and has not been used for a while, so may need some attention to make it work.|
 
 Note that:

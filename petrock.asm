@@ -81,7 +81,7 @@ ScratchStart:
 .endif
     TextTimeout:     .res  1              ; Text timeout second count (0 = disabled)
 .if PET         ; Rudimentary approach for PET. The C64 uses a CIA timer
-    TextCountDown:   .res  1              ; Text timeout countdown timer
+    TextCountDown:   .res  2              ; Text timeout countdown timer
 .endif
 .if .not (PET && SERIAL)
     DemoToggle:      .res  1              ; Update toggle to delay demo mode updates
@@ -257,7 +257,11 @@ drawLoop:
                 dex
                 bpl :-
 
-.if SERIAL
+.if PET         
+                jsr DownTextTimer     ; On the PET, we decrease the text timer to compensate for drawing time
+.endif
+
+.if SERIAL && (C64 || (PET && SENDSTAR))
                 lda #'*'              ; Send a * back to the host
                 jsr PutSerialChar
 .endif
@@ -1501,11 +1505,37 @@ StartTextTimer:
 .endif
 
 .if PET         ; We use a more rudimentary countdown timer on the PET
-                lda #$28
+                lda #$00
                 sta TextCountDown
+                lda #$20
+                sta TextCountDown+1
 .endif
                 rts
 
+.if PET
+
+;-----------------------------------------------------------------------------------
+; DownTextTimer - Cut the PET text timer down by a chunk
+;-----------------------------------------------------------------------------------
+
+DownTextTimer:
+                dec TextCountDown+1
+                beq @atzero
+                lda TextCountDown
+                sec
+                sbc #$40
+                sta TextCountDown
+                bcs @done
+                dec TextCountDown+1
+                bne @done
+
+@atzero:        lda #1
+                sta TextCountDown
+                sta TextCountDown+1
+
+@done:          rts
+
+.endif
 
 ;-----------------------------------------------------------------------------------
 ; CheckTextTimer - Clear text if TOD timer is at "TextTimeout" seconds
@@ -1524,8 +1554,10 @@ CheckTextTimer:
                 jmp ClearTextBlock
 .endif
 
-.if PET         ; Decrease countdown timer until we reach $00
+.if PET         ; Decrease countdown timer until we reach $0000
                 dec TextCountDown
+                bne @done
+                dec TextCountDown+1
                 bne @done
 
                 dec TextTimeout       ; Decrease timeout second count
