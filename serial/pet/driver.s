@@ -538,18 +538,17 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
                 ; The following code counts down from a baud-based value (higher baudrate
                 ;   means higher value), until it reaches 11. That triggers the setting up
                 ;   and then execution of per-row keyboard polling.
-                lda KbdPollCnt
+                dec KbdPollCnt
                 beq @finish           ; 0, so finish polling
+                lda KbdPollCnt
                 cmp #$11
                 beq @setup            ; 11, so setup polling
                 bcs @exit             ; > 11, so we're still counting down
                 ; One of the 10 scanning rows ;1-10
                 jsr PollKbdRow
-                dec KbdPollCnt
                 jmp @exit
 
 @setup:         jsr SetupKbdRow
-                dec KbdPollCnt
                 jmp @exit
 
 @finish:        lda KbdPollIntrvl
