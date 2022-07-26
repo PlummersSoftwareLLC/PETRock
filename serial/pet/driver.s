@@ -72,25 +72,6 @@ OpenSerial:
                 sta VIA_T1CH          ; Need to clear high before writing latch
                                       ; Otherwise it seems to fail half the time?
 
-                ; Set up the VIA timer based on the baud rate
-                ; Initial baud rate
-                ldx #BAUD
-                lda BaudTblLo,X
-                sta VIA_T1LL
-                lda BaudTblHi,X
-                sta VIA_T1LH
-
-                lda KbdPollIntTbl,X
-                sta KbdPollIntrvl
-                sta KbdPollCnt
-
-                ; Below 1200 baud there's not enough serial events between
-                ; keyboard polls to use the split routines
-                cpx #3                ; Use fast keyboard scanning above 600
-                bcc @slow
-                lda #$FF              ; Fast/split keyboard scanning
-                sta KbdFastFlag
-@slow:
                 cli
                 rts
 
@@ -145,15 +126,8 @@ StartSerial:
                 lda #0
                 sta RxBufWritePtr
                 sta RxBufReadPtr
-                sta KbdFastFlag
 
-                ; Below 1200 baud there's not enough serial events between
-                ; keyboard polls to use the split routines
-                cpx #3                ; Use fast keyboard scanning above 600
-                bcc @slow
-                lda #$FF              ; Fast/split keyboard scanning
-                sta KbdFastFlag
-@slow:          rts
+                rts
 
 ;-----------------------------------------------------------------------------------
 ; CloseSerial: Teardown serial comms. We try to restore everything to its original
@@ -320,96 +294,7 @@ SetTxPin:
                 sta VIA_PCR
                 rts
 
-;-----------------------------------------------------------------------
-; Poll a single row (58/63 cycles)
-; Assumes KeyRow has been setup, and ShiftFlag and CtrlFlag are cleared before the first call
-;-----------------------------------------------------------------------
-
-PollKbdRow:                           ;6;
-                ldy KeyRow            ;3;
-                sty PIA1_PA           ;4; Set scan row
-                lda PIA1_PB           ;4; Read in row
-                eor #$FF              ;2; Invert
-                tax                   ;2; Save
-                and ShiftMask,Y       ;4; Is a modifier pressed?
-                ora ShiftFlag         ;3; OR into shift if so
-                sta ShiftFlag         ;3;
-                txa                   ;2;
-                and CtrlMask,Y        ;4; Is a modifier pressed?
-                ora CtrlFlag          ;3; OR into ctrl if so
-                sta CtrlFlag          ;3;
-                txa                   ;2;
-                and KeyMask,Y         ;4; Mask out modifier keys
-                beq @nokey            ;2/3; Do we have a keypress in this row?
-                sty KeyRowFound       ;3; Found keypress in this row
-                sta KeyBitsFound      ;3; Saved bitmask
-
-@nokey:         inc KeyRow
-                rts                   ;6;
-                ; KeyBitsFound and KeyRowFound will be set to the last key press found
-                ; if one is found, with CtrlFlag and ShiftFlag non-zero if modifer pressed
-
-;-----------------------------------------------------------------------
-; Setup for start of a keyboard polling by rows (29 cycles)
-;-----------------------------------------------------------------------
-
-SetupKbdRow:                          ;6;
-                lda #0                ;2;
-                sta KeyRow            ;3;
-                sta ShiftFlag         ;3;
-                sta CtrlFlag          ;3;
-                sta KeyRowFound       ;3;
-                sta KeyBitsFound      ;3; If KeyBitsFound clear at end of polling then no key pressed
-                rts                   ;6;
-
-;-----------------------------------------------------------------------
-; If a key way pressed in the polling convert to a scancode
-; Returns pressed key or 0
-; 90 cycles worst case
-;-----------------------------------------------------------------------
-
-ConvertKbdRow:                        ;6;
-                lda KeyBitsFound      ;3;
-                tax                   ;2;
-                beq @nokey            ;2/3;
-                bit KeyBitsFound      ;4;Test bits 6 and 7 of mask
-                bmi @k7               ;2/3
-                bvs @k6               ;2/3
-                lda Log2Tbl,X         ;4; Get the highest bit pressed (6 and 7 are clear)
-                ; We've got the column of our bitpress in A
-@found:         sta KeyBitsFound      ;3; Overwrite bitmask with column to save
-                lda KeyRowFound       ;3; Each row is 8 long, so we need to multiply by 8
-                asl                   ;2; *2
-                asl                   ;2; *4
-                asl                   ;2; *8
-                ; CLC Not needed, KeyOffset's top 3 bits are 0
-                adc KeyBitsFound      ;3; A now contains our offset into the tables
-                tax                   ;2; Save into X
-
-                lda ShiftFlag         ;3;
-                beq @notshift         ;2/3;
-                ; Shift pressed, read upper table
-                lda KbdMatrixShift,X  ;4;
-                rts                   ;6; (57/59 cycles to here)
-
-@notshift:      lda KbdMatrix,X       ;4;
-                bmi @special          ;2/3; Don't have control modify special keys
-                lda CtrlFlag          ;3;
-                beq @notctrl          ;2/3
-                ; Ctrl pressed, read lower table and bitmask to CtrlFlag keys
-                lda KbdMatrix,X       ;4;
-                and #$9F              ;2;
-@special:       rts                   ;6; (71/73 if we didn't take @special)
-                                      ;   (61/63 if we took @special)
-                ; Normal key
-@notctrl:       lda KbdMatrix,X       ;4;
-                rts                   ;6; (71/73 to here)
-
-@k7:            lda #0                ;2; Table is backwards
-                beq @found            ;3;
-@k6:            lda #1                ;2;
-                bne @found            ;3;
-@nokey:         rts                   ;6; (20 cycles to here)
+.if BAUD < 3    ; Use "slow" (full-keyboard) polling when < 1200 Bd
 
 ;----------------------------------------------------------------------
 ; Poll the keyboard
@@ -485,6 +370,101 @@ PollKeyboard:
 @notctrl:       lda KbdMatrix,X
                 rts
 
+.else           ; We're at 1200 Bd or higher, so use "fast" (single-row) polling
+
+;-----------------------------------------------------------------------
+; Setup for start of a keyboard polling by rows (29 cycles)
+;-----------------------------------------------------------------------
+
+SetupKbdRow:                          ;6;
+                lda #0                ;2;
+                sta KeyRow            ;3;
+                sta ShiftFlag         ;3;
+                sta CtrlFlag          ;3;
+                sta KeyRowFound       ;3;
+                sta KeyBitsFound      ;3; If KeyBitsFound clear at end of polling then no key pressed
+                rts                   ;6;
+
+;-----------------------------------------------------------------------
+; Poll a single row (58/63 cycles)
+; Assumes KeyRow has been setup, and ShiftFlag and CtrlFlag are cleared before the first call
+;-----------------------------------------------------------------------
+
+PollKbdRow:                           ;6;
+                ldy KeyRow            ;3;
+                sty PIA1_PA           ;4; Set scan row
+                lda PIA1_PB           ;4; Read in row
+                eor #$FF              ;2; Invert
+                tax                   ;2; Save
+                and ShiftMask,Y       ;4; Is a modifier pressed?
+                ora ShiftFlag         ;3; OR into shift if so
+                sta ShiftFlag         ;3;
+                txa                   ;2;
+                and CtrlMask,Y        ;4; Is a modifier pressed?
+                ora CtrlFlag          ;3; OR into ctrl if so
+                sta CtrlFlag          ;3;
+                txa                   ;2;
+                and KeyMask,Y         ;4; Mask out modifier keys
+                beq @nokey            ;2/3; Do we have a keypress in this row?
+                sty KeyRowFound       ;3; Found keypress in this row
+                sta KeyBitsFound      ;3; Saved bitmask
+
+@nokey:         inc KeyRow
+                rts                   ;6;
+                ; KeyBitsFound and KeyRowFound will be set to the last key press found
+                ; if one is found, with CtrlFlag and ShiftFlag non-zero if modifer pressed
+
+;-----------------------------------------------------------------------
+; If a key way pressed in the polling convert to a scancode
+; Returns pressed key or 0
+; 90 cycles worst case
+;-----------------------------------------------------------------------
+
+ConvertKbdRow:                        ;6;
+                lda KeyBitsFound      ;3;
+                beq @nokey            ;2/3;
+                tax                   ;2;
+                bit KeyBitsFound      ;4;Test bits 6 and 7 of mask
+                bmi @k7               ;2/3
+                bvs @k6               ;2/3
+                lda Log2Tbl,X         ;4; Get the highest bit pressed (6 and 7 are clear)
+                ; We've got the column of our bitpress in A
+@found:         sta KeyBitsFound      ;3; Overwrite bitmask with column to save
+                lda KeyRowFound       ;3; Each row is 8 long, so we need to multiply by 8
+                asl                   ;2; *2
+                asl                   ;2; *4
+                asl                   ;2; *8
+                ; CLC Not needed, KeyOffset's top 3 bits are 0
+                adc KeyBitsFound      ;3; A now contains our offset into the tables
+                tax                   ;2; Save into X
+
+                lda ShiftFlag         ;3;
+                beq @notshift         ;2/3;
+                ; Shift pressed, read upper table
+                lda KbdMatrixShift,X  ;4;
+                rts                   ;6; (57/59 cycles to here)
+
+@notshift:      lda KbdMatrix,X       ;4;
+                bmi @special          ;2/3; Don't have control modify special keys
+                lda CtrlFlag          ;3;
+                beq @notctrl          ;2/3
+                ; Ctrl pressed, read lower table and bitmask to CtrlFlag keys
+                lda KbdMatrix,X       ;4;
+                and #$9F              ;2;
+@special:       rts                   ;6; (71/73 if we didn't take @special)
+                                      ;   (61/63 if we took @special)
+                ; Normal key
+@notctrl:       lda KbdMatrix,X       ;4;
+                rts                   ;6; (71/73 to here)
+
+@k7:            lda #0                ;2; Table is backwards
+                beq @found            ;3;
+@k6:            lda #1                ;2;
+                bne @found            ;3;
+@nokey:         rts                   ;6; (20 cycles to here)
+
+.endif          ; Baud-based keyboard polling routines
+
 ;-----------------------------------------------------------------------------------
 ; IRQ handler that is installed when OpenSerial is called
 ;-----------------------------------------------------------------------------------
@@ -543,9 +523,7 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
                 ; Transmit next bit if sending
                 jsr SendBit
 
-                lda KbdFastFlag       ; Which keyboard scan routine
-                bne @fastkbd
-
+.if BAUD < 3    ; Less than 1200 Bd => poll full keyboard
                 ;"Slow" keyboard polling (all rows at once)
                 dec KbdPollCnt        ; Check if we're due to poll
                 bne @exit
@@ -555,22 +533,30 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
                 jsr PollKeyboard      ; Do keyboard polling
                 jmp @keyend
 
-@fastkbd:       lda KbdPollCnt
-                beq @final            ; 0
+.else           ; 1200 Bd or higher => poll individual rows 
+
+                ; The following code counts down from a baud-based value (higher baudrate
+                ;   means higher value), until it reaches 11. That triggers the setting up
+                ;   and then execution of per-row keyboard polling.
+                lda KbdPollCnt
+                beq @finish           ; 0, so finish polling
                 cmp #$11
-                beq @first            ; 12
-                ; One of the 10 scanning rows ;1-11
+                beq @setup            ; 11, so setup polling
+                bcs @exit             ; > 11, so we're still counting down
+                ; One of the 10 scanning rows ;1-10
                 jsr PollKbdRow
                 dec KbdPollCnt
                 jmp @exit
 
-@first:         jsr SetupKbdRow
+@setup:         jsr SetupKbdRow
                 dec KbdPollCnt
                 jmp @exit
 
-@final:         lda KbdPollIntrvl
+@finish:        lda KbdPollIntrvl
                 sta KbdPollCnt        ; Reset polling counter
                 jsr ConvertKbdRow
+
+.endif          ; Baud-based keyboard polling routine
 
 @keyend:        cmp KbdByte           ; Check if same byte as before
                 sta KbdByte

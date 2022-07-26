@@ -13,12 +13,11 @@ KbdPollIntrvl:  .res 1      ; KBD Polling interval for baud
 KbdPollCnt:     .res 1      ; Polling interval counter
 KbdByte:        .res 1      ; (Last) byte read from keyboard
 KeyCol:         .res 1      ; Key scan column
-KeyRow:         .res 1      ; Temp variables for split/fast key scanning
-KeyRowFound:    .res 1      ; Found the key row
-KeyBitsFound:   .res 1      ; Found the key bits
+KeyRow:         .res 1      ; Key row that is being scanned
+KeyRowFound:    .res 1      ; Key row in which pressed key was found
+KeyBitsFound:   .res 1      ; Bits of key that was found depressed
 KeyOffset:      .res 1      ; Keyboard matrix offset for shift
 KbdTemp:        .res 1      ; Keyboard scanning temp, to allow BIT instruction
-KbdFastFlag:    .res 1      ; 0 if slow/normal scanning, 1 for fast split scanning
 KbdNewFlag:	    .res 1      ; Indicate if new key was pressed
 ShiftFlag:      .res 1      ; Indicator if Shift was pressed
 CtrlFlag:       .res 1      ; Indicator if Ctrl was pressed
