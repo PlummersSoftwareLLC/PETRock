@@ -86,6 +86,7 @@ ScratchStart:
     SerialBufPos:    .res  1              ; Current index into serial buffer
     SerialBuf:       .res  PACKET_LENGTH  ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
     SerialBufLen = *-SerialBuf            ; Length of Serial Buffer
+    HeardPacket:     .res  1              ; Flag for receipt of complete packet
   .if C64
 .include "serial/c64/vars.s"
   .elseif PET
@@ -225,7 +226,7 @@ drawLoop:
 .endif
 
 @donedata:      lda DemoMode          ; Load demo data if demo mode is on
-                beq @dovu
+                beq @nodemo
                 jsr FillPeaks
                 ldx #$08
                 ldy #$ff
@@ -233,6 +234,15 @@ drawLoop:
                 bne @delay
                 dex
                 bne @delay
+                beq @dovu
+
+@nodemo:        
+.if SERIAL
+                lda HeardPacket
+                beq drawLoop          ; We didn't get a complete packet yet, so no point in drawing anything
+                lda #0 
+                sta HeardPacket       ; Acknowledge packet
+.endif
 @dovu:          jsr DrawVU            ; Draw the VU bar at the top of the screen
 
 .if TIMING && C64                     ; If 'TIMING' is defined we turn the border
@@ -531,6 +541,9 @@ GotSerialPacket:
 
                 cpy #8                    ; Have we done bytes 0-3 yet?
                 bne :-                    ; Repeat until we have
+
+                lda #1
+                sta HeardPacket
                 rts
 
 .endif          ; SERIAL
