@@ -1,5 +1,5 @@
 ;-----------------------------------------------------------------------------------
-; PETROCK: Spectrum Analyzer Display for C64
+; PETROCK: Spectrum Analyzer Display for C64 and PET
 ;-----------------------------------------------------------------------------------
 ; (c) Plummer's Software Ltd, 02/11/2022 Initial commit
 ;         David Plummer
@@ -29,8 +29,11 @@
 ; and stored in the PeakData table.  The code on the ESP32 sends it over as 16 nibbles
 ; packed into 8 bytes plus a VU value.
 ;
-; The built-in serial code on the C64 is poor, and serdrv.s contains a new impl that 
-; works well for receiving data up to 4800 baud.
+; The built-in serial code on the C64 is poor, and serial/c64/driver.s contains a new 
+; impl that works well for receiving data up to 4800 baud.
+; On the PET, built-in serial code is effectively absent. For the PET, 
+; serial/c64/driver.s contains an implementation that is confirmed to receive data
+; up to 2400 baud.
 ;
 ;-----------------------------------------------------------------------------------
 

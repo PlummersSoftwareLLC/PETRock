@@ -1,5 +1,5 @@
 ;-----------------------------------------------------------------------------------
-; Spectrum Analyzer Display for C64
+; Spectrum Analyzer Display for C64 and PET
 ;-----------------------------------------------------------------------------------
 ; (c) Plummer's Software Ltd, 02/11/2022 Initial commit
 ;         David Plummer

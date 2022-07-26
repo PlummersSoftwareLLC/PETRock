@@ -1,4 +1,27 @@
+;-----------------------------------------------------------------------------------
+; Spectrum Analyzer Display for C64 and PET
+;-----------------------------------------------------------------------------------
+; (c) Plummer's Software Ltd, 07/26/2022 Initial commit
+;         David Plummer
+;         Rutger van Bergen
+;-----------------------------------------------------------------------------------
+; Serial driver for the PET using Userport.
+;
+; Based on parts of PETTERM, written by Hayden Kroepfl (Chartreuse) 2017-2022.
+; (https://github.com/ChartreuseK/PETTERM)
+;
+; Modified by Rutger van Bergen for use with the Spectrum Analyzer Display for PET
+;-----------------------------------------------------------------------------------
+
+;-----------------------------------------------------------------------------------
+; Serial driver config
+;-----------------------------------------------------------------------------------
+
 BAUD            = 4                   ; Baud rate, index into BaudTblLo/Hi (4 = 2400)
+
+;-----------------------------------------------------------------------------------
+; Constants
+;-----------------------------------------------------------------------------------
 
 ST_STARTBIT     = 0                   ; Waiting/Sending for start bit
 ST_READY        = 1                   ; Ready to start sending
