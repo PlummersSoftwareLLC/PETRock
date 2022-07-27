@@ -1523,6 +1523,9 @@ StartTextTimer:
 ;-----------------------------------------------------------------------------------
 
 DownTextTimer:
+                lda TextTimeout
+                beq @done
+
                 dec TextCountDown+1
                 beq @atzero
                 lda TextCountDown
