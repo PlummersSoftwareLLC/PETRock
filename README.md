@@ -18,7 +18,7 @@ Every frame the serial port is checked for incoming data which is then stored in
 
 Concerning handling of serial input:
 
-- On the C64, the built-in serial code on the C64 is poor. [serial/c64/driver.s](serial/c64/driver.s) contains a new implementation for the C64 that works well for receiving data up to 4800 baud.
+- On the C64, the built-in serial code is poor. [serial/c64/driver.s](serial/c64/driver.s) contains a new implementation for the C64 that works well for receiving data up to 4800 baud.
 - On the PET, a built-in serial driver is effectively absent. [serial/pet/driver.s](serial/pet/driver.s) contains an implementation for the PET that is confirmed to receive data up to 2400 baud. Due to the hardware involved (the PET uses a 6522 VIA instead of the C64's 6526 CIA), the serial driver also includes its own keyboard polling routines.
 
 ## Configuring and building
