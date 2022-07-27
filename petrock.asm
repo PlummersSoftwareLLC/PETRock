@@ -1492,7 +1492,7 @@ InitTODClocks:
 
 StartTextTimer:
 .if C64         ; CIAs only available on the C64
-                lda CIA1_CRB             ; Clear CRB7 to set the TOD, not an alarm
+                lda CIA1_CRB            ; Clear CRB7 to set the TOD, not an alarm
                 and #$7f
                 sta CIA1_CRB
 
@@ -1501,16 +1501,16 @@ StartTextTimer:
                 sta CIA1_TODHR
                 sta CIA1_TODMIN
                 sta CIA1_TODSEC
-                sta CIA1_TOD10            ; This write starts the clock
+                sta CIA1_TOD10          ; This write starts the clock
 .endif
 
 .if PET         ; We use a more rudimentary countdown timer on the PET
                 lda #$00
                 sta TextCountDown
   .if SERIAL    ; 
-                lda #$20                  ; Serial handling takes time, so we count
-  .else                                   ;   down from a lower value than when
-                lda #$40                  ;   serial is disabled
+                lda #$20                ; Serial handling takes time, so we count
+  .else                                 ;   down from a lower value than when
+                lda #$40                ;   serial is disabled
   .endif
                 sta TextCountDown+1
 .endif
@@ -1526,9 +1526,9 @@ DownTextTimer:
                 lda TextTimeout
                 beq @done
 
-                dec TextCountDown+1
-                beq @atzero
-                lda TextCountDown
+                dec TextCountDown+1     ; We take off 384 just because that seems 
+                beq @atzero             ;   to work out about right for one screen
+                lda TextCountDown       ;   redraw.
                 sec
                 sbc #$80
                 sta TextCountDown
@@ -1536,9 +1536,9 @@ DownTextTimer:
                 dec TextCountDown+1
                 bne @done
 
-@atzero:        lda #1
-                sta TextCountDown
-                sta TextCountDown+1
+@atzero:        lda #1                  ; Due to how CheckTextTimer assesses if time
+                sta TextCountDown       ;   has run out, set lo and hi bytes to 1 to
+                sta TextCountDown+1     ;   finish counting down this sorta second.
 
 @done:          rts
 
