@@ -30,14 +30,11 @@ In the [`settings.inc`](settings.inc) file, a number of symbols are defined that
 |C64|0 or 1|No|Configure build for the Commodore 64. Exactly one of C64 or PET **must** be defined to equal 1.|
 |DEBUG|0 or 1|Yes|Set to 1 to enable code that only is included for debug builds.|
 |PET|0 or 1|No|Configure build for the PET. Exactly one of C64 or PET **must** be defined to equal 1.|
-|SENDSTAR|0 or 1|Yes, on the PET with SERIAL enabled|Set to 1 to send a * after each screen redraw on the PET when SERIAL is enabled. This will create clicking noises on PETs with a piezo speaker installed. This setting is ignored on the C64.|
+|SENDSTAR|0 or 1|Yes, on the PET with SERIAL enabled|Set to 1 to send a \* after each screen redraw on the PET when SERIAL is enabled. This will create clicking noises on PETs with a piezo speaker installed. On the C64 this setting is ignored, and the \* is always sent when serial is enabled.|
 |SERIAL|0 or 1|Yes|Set to 1 to read visualisation data from the user port.|
 |TIMING|0 or 1|Yes|Set to 1 to show timing information concerning the drawing of spectrum analyzer updates. Only supported on the C64 and has not been used for a while, so may need some attention to make it work.|
 
-Note that:
-
-- the PET and C64 symbols are not set by default. The reason is that the assembly target is a prime candidate to be set via the command line.
-- PETs with a built-in piezo speaker make a clicking noise with this version of the code when serial is enabled. It's somehow related to the redrawing of the VU meters and frequency bars (hints on how to fix this are welcome!)
+Note that the PET and C64 symbols are not set by default. The reason is that the assembly target is a prime candidate to be set via the command line.
 
 This repository's code targets the ca65 assembler and cl65 linker that are part of the [cc65](https://cc65.github.io/) GitHub project. You will need a fairly recent build of cc65 for assembly of this repository's contents to work. If you receive errors about the .literal mnemonic, this is the likely reason.
 

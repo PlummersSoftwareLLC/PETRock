@@ -171,12 +171,11 @@ endOfBasic:     .word 00
 start:
                 cld                   ; Turn off decimal mode
 
-.if C64         ; TOD clocks only on C64
-                jsr InitTODClocks
-.endif
                 jsr InitVariables     ; Zero (init) all of our BSS storage variables
 
-.if C64         ; Color only available on C64
+.if C64         ; TOD and color only available on C64
+                jsr InitTODClocks
+
                 lda VIC_BORDERCOLOR   ; Save current colors for later
                 sta BorderColor
                 lda VIC_BG_COLOR0
@@ -198,6 +197,7 @@ start:
 .if C64         ; Color only supported on C64
                 jsr FillBandColors    ; Do initial fill of band color RAM
 .endif
+
 .if SERIAL
                 jsr OpenSerial        ; Open the serial port for data from the ESP32   
                 jsr StartSerial       ; Enable Serial!  Behold the power!
@@ -231,7 +231,7 @@ drawLoop:
 @donedata:      lda DemoMode          ; Load demo data if demo mode is on
                 beq @redraw
                 jsr FillPeaks
-                ldx #$08
+                ldx #$10
                 ldy #$ff
 @delay:         dey
                 bne @delay
@@ -246,9 +246,9 @@ drawLoop:
                 jsr DrawVU            ; Draw the VU bar at the top of the screen
 
 .if TIMING && C64                     ; If 'TIMING' is defined we turn the border
-                lda #LIGHT_GREY       ;  color to different colors at particular
-                sta VIC_BORDERCOLOR   ;  places in the draw code to help see how
-.endif                                ;  long various parts of it are taking.
+                lda #LIGHT_GREY       ;   color to different colors at particular
+                sta VIC_BORDERCOLOR   ;   places in the draw code to help see how
+.endif                                ;   long various parts of it are taking.
 
                 ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
 :
@@ -258,8 +258,8 @@ drawLoop:
                 bpl :-
 
 .if PET         
-                jsr DownTextTimer     ; On the PET, we decrease the text timer to compensate for drawing time
-.endif
+                jsr DownTextTimer     ; On the PET, decrease the text timer to compensate 
+.endif                                ;   for drawing time
 
 .if SERIAL && (C64 || (PET && SENDSTAR))
                 lda #'*'              ; Send a * back to the host
@@ -601,7 +601,7 @@ FillPeaks:
                 bpl :-
 
                 lda #<PeakData        ; Copy the single VU byte from the PeakData
-                sta zptmpB            ;  table into the VU variable
+                sta zptmpB            ;   table into the VU variable
                 lda #>PeakData
                 sta zptmpB+1
                 ldy DataIndex
@@ -1507,7 +1507,11 @@ StartTextTimer:
 .if PET         ; We use a more rudimentary countdown timer on the PET
                 lda #$00
                 sta TextCountDown
-                lda #$20
+  .if SERIAL    ; 
+                lda #$20                  ; Serial handling takes time, so we count
+  .else                                   ;   down from a lower value than when
+                lda #$40                  ;   serial is disabled
+  .endif
                 sta TextCountDown+1
 .endif
                 rts
@@ -1523,7 +1527,7 @@ DownTextTimer:
                 beq @atzero
                 lda TextCountDown
                 sec
-                sbc #$40
+                sbc #$80
                 sta TextCountDown
                 bcs @done
                 dec TextCountDown+1
