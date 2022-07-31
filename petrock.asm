@@ -1,5 +1,5 @@
 ;-----------------------------------------------------------------------------------
-; PETROCK: Spectrum Analyzer Display for C64
+; PETROCK: Spectrum Analyzer Display for C64 and PET
 ;-----------------------------------------------------------------------------------
 ; (c) Plummer's Software Ltd, 02/11/2022 Initial commit
 ;         David Plummer
@@ -29,8 +29,11 @@
 ; and stored in the PeakData table.  The code on the ESP32 sends it over as 16 nibbles
 ; packed into 8 bytes plus a VU value.
 ;
-; The built-in serial code on the C64 is poor, and serdrv.s contains a new impl that 
-; works well for receiving data up to 4800 baud.
+; The built-in serial code on the C64 is poor, and serial/c64/driver.s contains a new 
+; impl that works well for receiving data up to 4800 baud.
+; On the PET, built-in serial code is effectively absent. For the PET, 
+; serial/c64/driver.s contains an implementation that is confirmed to receive data
+; up to 2400 baud.
 ;
 ;-----------------------------------------------------------------------------------
 
@@ -68,9 +71,7 @@ ScratchStart:
     Peaks:           .res  NUM_BANDS      ; Peak Data for current frame
     NextStyle:       .res  1              ; The next style we will pick
     CharDefs:        .res  VISUALDEF_SIZE ; Storage for the visualDef currently in use
-    SerialBufPos:    .res  1              ; Current index into serial buffer
-    SerialBuf:       .res  PACKET_LENGTH  ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
-    SerialBufLen = *-SerialBuf            ; Length of Serial Buffer
+    RedrawFlag:      .res  1              ; Flag to redraw screen
     DemoMode:        .res  1              ; Demo mode enabled
 .if C64         ; Color's only relevant on the C64
     CurSchemeIndex:  .res  1              ; Current band color scheme index
@@ -80,18 +81,29 @@ ScratchStart:
 .endif
     TextTimeout:     .res  1              ; Text timeout second count (0 = disabled)
 .if PET         ; Rudimentary approach for PET. The C64 uses a CIA timer
-    TextCountDown:   .res  1              ; Text timeout countdown timer
+    TextCountDown:   .res  2              ; Text timeout countdown timer
 .endif
+.if .not (PET && SERIAL)
     DemoToggle:      .res  1              ; Update toggle to delay demo mode updates
-
-.if C64         ; Serial only for C64
-.include "serdrv.var"                     ; Include serial driver variables
+.endif
+.if SERIAL                                ; Include serial driver variables
+    SerialBufPos:    .res  1              ; Current index into serial buffer
+    SerialBuf:       .res  PACKET_LENGTH  ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
+    SerialBufLen = *-SerialBuf            ; Length of Serial Buffer
+  .if C64
+.include "serial/c64/vars.s"
+  .elseif PET
+.include "serial/pet/vars.s"
+  .endif
 .endif
 
 ScratchEnd: 
 
 .assert * <= SCRATCH_END, error           ; Make sure we haven't run off the end of the buffer
+
+.if SERIAL
 .assert SerialBufLen = PACKET_LENGTH, error
+.endif
 
 ; Start of Binary -------------------------------------------------------------------
 
@@ -119,20 +131,18 @@ Line2:          .word Line3
 Line3:          .word endOfBasic       ; PTR to next line, which is 0000
                 .word 3               ; Line Number 20
                 .byte TK_SYS          ;   SYS token
-                .literal " "
-                .literal .string(*+7) ; Entry is 7 bytes from here, which
-                                      ;  not how I'd like to do it but you cannot
-                                      ;  use a forward reference in STR$()
+                .literal .sprintf(" %d", PROGRAM)
 
-                .byte 00              ; Do not modify without understanding
-endOfBasic:     .word 00              ;   the +7 expression above, as this is
-                                      ;   exactly 7 bytes and must match it
+                .byte 00
+endOfBasic:     .word 00
+
+
+.res            PROGRAM - *
 
 ;-----------------------------------------------------------------------------------
 ; Start of Assembly Code
 ;-----------------------------------------------------------------------------------
 
-start:          
 .if PET
                 lda PET_DETECT        ; Check if we're dealing with original ROMs
                 cmp #PET_2000
@@ -146,24 +156,26 @@ start:
 @goodpet:
 .endif
 
-.if C64         ; Serial only for C64
-                jmp realStart
+.if SERIAL
 
-.include "serdrv.s"                   ; Include serial driver routines here, so
-                                      ;   they're available from this point
-                                      ;   onwards
+                jmp start
 
-realStart:
+  .if C64
+.include "serial/c64/driver.s"
+  .elseif PET
+.include "serial/pet/driver.s"
+  .endif
+
 .endif
 
+start:
                 cld                   ; Turn off decimal mode
 
-.if C64         ; TOD clocks only on C64
-                jsr InitTODClocks
-.endif
                 jsr InitVariables     ; Zero (init) all of our BSS storage variables
 
-.if C64         ; Color only available on C64
+.if C64         ; TOD and color only available on C64
+                jsr InitTODClocks
+
                 lda VIC_BORDERCOLOR   ; Save current colors for later
                 sta BorderColor
                 lda VIC_BG_COLOR0
@@ -182,19 +194,18 @@ realStart:
                 jsr EmptyBorder       ; Draw the screen frame and decorations
                 jsr SetNextStyle      ; Select the first visual style
 
-.if C64         ; Color and serial only supported on C64
+.if C64         ; Color only supported on C64
                 jsr FillBandColors    ; Do initial fill of band color RAM
+.endif
 
+.if SERIAL
                 jsr OpenSerial        ; Open the serial port for data from the ESP32   
-                lda #2                ; Could just be non-zero, but might be device ID!
-                ldy #0                ;   Either way, zero is disable, we want the opposite
-                ldx #0
-                jsr SerialIoctl       ; Enable Serial!  Behold the power!
+                jsr StartSerial       ; Enable Serial!  Behold the power!
 .endif
 
 drawLoop:       
 
-.if C64         ; Serial only on C64
+.if SERIAL
                 jsr GetSerialChar
                 cmp #$ff              ; If byte is $ff, check if "no data" was flagged
                 bne @havebyte
@@ -218,26 +229,46 @@ drawLoop:
 .endif
 
 @donedata:      lda DemoMode          ; Load demo data if demo mode is on
-                beq @dovu
+                beq @redraw
                 jsr FillPeaks
-                ldx #$08
-                jsr Delay
-@dovu:          jsr DrawVU            ; Draw the VU bar at the top of the screen
+                ldx #$10
+                ldy #$ff
+@delay:         dey
+                bne @delay
+                dex
+                bne @delay
+
+@redraw:        lda RedrawFlag
+                beq @afterdraw        ; We didn't get a complete packet yet, so no point in drawing anything
+                lda #0 
+                sta RedrawFlag        ; Acknowledge packet
+
+                jsr DrawVU            ; Draw the VU bar at the top of the screen
 
 .if TIMING && C64                     ; If 'TIMING' is defined we turn the border
-                lda #LIGHT_GREY       ;  color to different colors at particular
-                sta VIC_BORDERCOLOR   ;  places in the draw code to help see how
-.endif                                ;  long various parts of it are taking.
+                lda #LIGHT_GREY       ;   color to different colors at particular
+                sta VIC_BORDERCOLOR   ;   places in the draw code to help see how
+.endif                                ;   long various parts of it are taking.
 
-drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
+                ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
 :
                 lda Peaks, x          ; X = band numner, A = value
                 jsr DrawBand
                 dex
                 bpl :-
-                ; Check to see its time to scroll the color memory
+
+.if PET         
+                jsr DownTextTimer     ; On the PET, decrease the text timer to compensate 
+.endif                                ;   for drawing time
+
+.if SERIAL && (C64 || (PET && SENDSTAR))
+                lda #'*'              ; Send a * back to the host
+                jsr PutSerialChar
+.endif
 
 .if TIMING && C64
+                ; Check to see its time to scroll the color memory
+
                 lda #BLACK
                 sta VIC_BORDERCOLOR
 :               bit RASTHI
@@ -270,13 +301,13 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 jsr CHROUT
 .endif          ; TIMING && C64
 
-                jsr CheckTextTimer
+@afterdraw:     jsr CheckTextTimer
 
-.if C64         
-                lda #'*'              ; Send a * back to the host
-                jsr PutSerialChar
+.if SERIAL
+                jsr GetKeyboardChar   ; Get a character from the serial driver's keyboard handler
+.else
+                jsr GETIN             ; No serial, use regular GETIN routine
 .endif
-                jsr GETIN             ; Keyboard Handling - check for RUN
 
                 cmp #0
                 bne @notEmpty
@@ -319,6 +350,10 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
                 jmp drawLoop
 
 @exit:
+.if SERIAL
+                jsr CloseSerial
+.endif
+
 .if C64         ; Color only available on C64
                 lda BorderColor       ; Restore colors to how we found them
                 sta VIC_BORDERCOLOR
@@ -335,13 +370,6 @@ drawAllBands:   ldx #NUM_BANDS - 1    ; Draw each of the bands in reverse order
 
                 rts
 
-Delay:          ldy #$FF
-:               dey
-                bne :-
-                dex
-                bne Delay
-                rts
-                
 ;-----------------------------------------------------------------------------------
 ; ToggleBorder - Toggle border around spectrum analyzer area
 ;-----------------------------------------------------------------------------------
@@ -441,7 +469,7 @@ ClrBorderMem:   ldy #XSIZE-1          ; Top line
 
                 rts
 
-.if C64         ; Serial only supported on C64
+.if SERIAL
 
 ;-----------------------------------------------------------------------------------
 ; GotSerial     Process incoming serial bytes from the ESP32 
@@ -467,7 +495,7 @@ GotSerial:      ldy SerialBufPos
 :               cpy SerialBufPos          ; Are we in the right char pos for it?
                 beq :+                    ;  Yep - Process packet
                 ldy #0                    ;  Nope - Restart filling buffer
-                sta SerialBufPos
+                sty SerialBufPos
                 beq @done
 
 :               jsr GotSerialPacket
@@ -521,9 +549,12 @@ GotSerialPacket:
 
                 cpy #8                    ; Have we done bytes 0-3 yet?
                 bne :-                    ; Repeat until we have
+
+                lda #1
+                sta RedrawFlag            ; Time to redraw!
                 rts
 
-.endif          ; C64
+.endif          ; SERIAL
 
 ;-----------------------------------------------------------------------------------
 ; FillPeaks
@@ -532,14 +563,18 @@ GotSerialPacket:
 ; and vu value
 ;-----------------------------------------------------------------------------------
 
-FillPeaks:      lda DemoToggle
+FillPeaks:      
+.if .not (PET && SERIAL)
+                lda DemoToggle
                 eor #$01
                 sta DemoToggle
                 beq @proceed
 
                 rts
 
-@proceed:       tya
+@proceed:       
+.endif
+                tya
                 pha
                 txa
                 pha
@@ -566,16 +601,20 @@ FillPeaks:      lda DemoToggle
                 bpl :-
 
                 lda #<PeakData        ; Copy the single VU byte from the PeakData
-                sta zptmpB            ;  table into the VU variable
+                sta zptmpB            ;   table into the VU variable
                 lda #>PeakData
                 sta zptmpB+1
                 ldy DataIndex
                 lda (zptmpB), y
                 sta VU
 
+                lda #1
+                sta RedrawFlag        ; Time to redraw!
+
                 inc DataIndex         ; Inc DataIndex - Assumes wrap, so if you
                                       ;   have exacly 256 bytes, you'd need to
                                       ;   check and fix that here
+
                 pla
                 tax
                 pla
@@ -595,6 +634,9 @@ InitVariables:  ldx #ScratchEnd-ScratchStart
                 dex
                 cpx #$ff
                 bne :-
+
+                lda #1
+                sta RedrawFlag
 
                 rts
 
@@ -616,6 +658,9 @@ SwitchDemoMode: lda DemoMode          ; Toggle demo mode bit
                 bpl :-
 
                 sta VU
+
+                lda #1
+                sta RedrawFlag        ; Force redraw
 
                 ldx #<DemoOffText     ; Tell user what just happened
                 ldy #>DemoOffText
@@ -691,6 +736,7 @@ WLRaw:          ldy #0
 ;-----------------------------------------------------------------------------------
 ; ShowHelp      Show help text
 ;-----------------------------------------------------------------------------------
+
 ShowHelp:
                 lda #0
                 ldx #<EmptyText
@@ -1446,7 +1492,7 @@ InitTODClocks:
 
 StartTextTimer:
 .if C64         ; CIAs only available on the C64
-                lda CIA1_CRB             ; Clear CRB7 to set the TOD, not an alarm
+                lda CIA1_CRB            ; Clear CRB7 to set the TOD, not an alarm
                 and #$7f
                 sta CIA1_CRB
 
@@ -1455,15 +1501,48 @@ StartTextTimer:
                 sta CIA1_TODHR
                 sta CIA1_TODMIN
                 sta CIA1_TODSEC
-                sta CIA1_TOD10            ; This write starts the clock
+                sta CIA1_TOD10          ; This write starts the clock
 .endif
 
 .if PET         ; We use a more rudimentary countdown timer on the PET
-                lda #$28
+                lda #$00
                 sta TextCountDown
+  .if SERIAL    ; 
+                lda #$20                ; Serial handling takes time, so we count
+  .else                                 ;   down from a lower value than when
+                lda #$40                ;   serial is disabled
+  .endif
+                sta TextCountDown+1
 .endif
                 rts
 
+.if PET
+
+;-----------------------------------------------------------------------------------
+; DownTextTimer - Cut the PET text timer down by a chunk
+;-----------------------------------------------------------------------------------
+
+DownTextTimer:
+                lda TextTimeout
+                beq @done
+
+                dec TextCountDown+1     ; We take off 384 just because that seems 
+                beq @atzero             ;   to work out about right for one screen
+                lda TextCountDown       ;   redraw.
+                sec
+                sbc #$80
+                sta TextCountDown
+                bcs @done
+                dec TextCountDown+1
+                bne @done
+
+@atzero:        lda #1                  ; Due to how CheckTextTimer assesses if time
+                sta TextCountDown       ;   has run out, set lo and hi bytes to 1 to
+                sta TextCountDown+1     ;   finish counting down this sorta second.
+
+@done:          rts
+
+.endif
 
 ;-----------------------------------------------------------------------------------
 ; CheckTextTimer - Clear text if TOD timer is at "TextTimeout" seconds
@@ -1484,6 +1563,8 @@ CheckTextTimer:
 
 .if PET         ; Decrease countdown timer until we reach $0000
                 dec TextCountDown
+                bne @done
+                dec TextCountDown+1
                 bne @done
 
                 dec TextTimeout       ; Decrease timeout second count

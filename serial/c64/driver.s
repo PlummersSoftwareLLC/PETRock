@@ -1,5 +1,5 @@
 ;-----------------------------------------------------------------------------------
-; Spectrum Analyzer Display for C64
+; Spectrum Analyzer Display for C64 and PET
 ;-----------------------------------------------------------------------------------
 ; (c) Plummer's Software Ltd, 02/11/2022 Initial commit
 ;         David Plummer
@@ -132,7 +132,6 @@ OpenSerial:
 ; If no data is available, SER_ERR_NO_DATA is returned in X/Y.
 ;-----------------------------------------------------------------------------------
 
-
 GetSerialChar:   
         ldx #RS232_DEV
         jsr CHKIN
@@ -179,22 +178,23 @@ PutSerialChar:
         jsr CLRCH
         rts
 
+;-----------------------------------------------------------------------------------
+; StartSerial: Start serial communication. OpenSerial must have been called already.
+;-----------------------------------------------------------------------------------
+
+StartSerial     = ser_enable
 
 ;-----------------------------------------------------------------------------------
-; SerialIoctl: Pass 0 in A to disable serial, 2 to enable
+; CloseSerial: Teardown serial comms. We just disable it.
 ;-----------------------------------------------------------------------------------
 
-SerialIoctl:
-      cmp #0
-      beq @disable
-@enable:
-      jsr ser_enable
-      sec
-      bcs @exit
-@disable:
-      jsr ser_disable 
-@exit:
-      rts
+CloseSerial     = ser_disable
+
+;-----------------------------------------------------------------------------------
+; GetKeyboardChar: Get a character from the keyboard. In this case, just use GETIN
+;-----------------------------------------------------------------------------------
+
+GetKeyboardChar = GETIN
 
 ;-----------------------------------------------------------------------------------
 

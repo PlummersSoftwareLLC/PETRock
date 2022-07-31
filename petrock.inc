@@ -29,6 +29,7 @@
     .include            "c64.inc"
 
     BASE                = $0801     ; C64 Start of BASIC
+    PROGRAM             = $0900     ; Start of actual program
                 
     zptmp               = $FB
     zptmpB              = $FD
@@ -44,12 +45,43 @@
     
     COLOR_MEM           = $d800   ; Screen color memory of 1000 bytes
     TIMERSCALE          = 1022    ; Clock runs at 1.022MHz
+
+    BLACK               = 0
+    WHITE               = 1
+    RED                 = 2
+    CYAN                = 3
+    PURPLE              = 4
+    GREEN               = 5
+    BLUE                = 6
+    YELLOW              = 7
+    ORANGE              = 8
+    BROWN               = 9
+    LIGHT_RED           = 10
+    DARK_GREY           = 11
+    MED_GREY            = 12
+    LIGHT_GREEN         = 13
+    LIGHT_BLUE          = 14
+    LIGHT_GREY          = 15
+
+  .if SERIAL
+    BAUD300             = 6
+    BAUD1200            = 4
+    BAUD2400            = 2
+    BAUD4800            = 0
+  .endif
+
 .endif
 
 .if PET
     .include "pet.inc"
 
     BASE                = $0401     ; PET Start of BASIC
+  .if SERIAL
+    RX_BUF              = $0500     ; Circular buffer for serial input (256 bytes)
+    PROGRAM             = $0600     ; Start of actual program
+  .else
+    PROGRAM             = $0500
+  .endif
 
     zptmp               = $BD
     zptmpB              = $00
@@ -64,48 +96,25 @@
     XSIZE               = 40
 
 .endif
-
-; Serial data packet
-
-MAGIC_LEN           = 1       ; Number of magic bytes if any
-MAGIC_BYTE_0        = (3 << 4 + 15); Index of "D" plus index of "P"
-DATA_LEN            = 8       ; Size of Data portion
-VU_LEN              = 1       ; Size of VU
-PACKET_LENGTH       = MAGIC_LEN + DATA_LEN + VU_LEN + 1 ; NUL terminated so +1
         
-.if C64             ; Screen color codes and baud rates for C64
-
-BLACK               = 0
-WHITE               = 1
-RED                 = 2
-CYAN                = 3
-PURPLE              = 4
-GREEN               = 5
-BLUE                = 6
-YELLOW              = 7
-ORANGE              = 8
-BROWN               = 9
-LIGHT_RED           = 10
-DARK_GREY           = 11
-MED_GREY            = 12
-LIGHT_GREEN         = 13
-LIGHT_BLUE          = 14
-LIGHT_GREY          = 15
-
-BAUD300             = 6
-BAUD1200            = 4
-BAUD2400            = 2
-BAUD4800            = 0
-
-.endif
-
 ; Includes --------------------------------------------------------------------------
 
     .include        "cbm_kernal.inc"
 
-.if C64             ; Currently only pull in serial includes for C64
+.if SERIAL
+  .if C64           ; Currently only pull in serial kernal includes for C64
     .include        "ser-kernel.inc"
+  .endif
+                    ; Error code includes also used by PET driver
     .include        "ser-error.inc"
+
+    ; Serial data packet
+
+    MAGIC_LEN           = 1       ; Number of magic bytes if any
+    MAGIC_BYTE_0        = (3 << 4 + 15); Index of "D" plus index of "P"
+    DATA_LEN            = 8       ; Size of Data portion
+    VU_LEN              = 1       ; Size of VU
+    PACKET_LENGTH       = MAGIC_LEN + DATA_LEN + VU_LEN + 1 ; NUL terminated so +1
 .endif 
 
 ; System Definition -----------------------------------------------------------------
