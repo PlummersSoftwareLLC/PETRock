@@ -564,7 +564,7 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
                 dec KbdPollCnt
                 beq @finish           ; 0, so finish polling
                 lda KbdPollCnt
-                cmp #$11
+                cmp #11
                 beq @setup            ; 11, so setup polling
                 bcs @exit             ; > 11, so we're still counting down
                 ; One of the 10 scanning rows ;1-10
