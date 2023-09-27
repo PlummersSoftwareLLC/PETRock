@@ -184,6 +184,22 @@ VUSYMBOL            = 244               ; Symbol for a filled VU square
 .endstruct
 VISUALDEF_SIZE = .sizeof(visualDef)
 
+; Our keyboard definitions ------------------------------------------------
+
+.if BSNSS_KBD
+KEY_S           = $73
+KEY_C           = $63
+KEY_C_SHIFT     = $C3
+KEY_D           = $64
+KEY_B           = $62
+.else
+KEY_S           = $53
+KEY_C           = $43
+KEY_C_SHIFT     = $C3
+KEY_D           = $44   
+KEY_B           = $42
+.endif
+
 ; Our UI Definitions ------------------------------------------------------
 
 .ifdef COL80

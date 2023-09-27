@@ -308,42 +308,44 @@ drawLoop:
 .else
                 jsr GETIN             ; No serial, use regular GETIN routine
 .endif
-
+                
                 cmp #0
                 bne @notEmpty
 
                 jmp drawLoop
 
-@notEmpty:      cmp #$53              ; Letter "S"
+@notEmpty:      
+                
+                cmp #KEY_S                    ; "S"
                 bne @notStyle
                 jsr SetNextStyle
                 jmp drawLoop
 
 @notStyle:
 .if C64         ; Color only available on C64
-                cmp #$43              ; Letter "C"
+                cmp #KEY_C                    ; "C"
                 bne @notColor
                 jsr SetNextScheme
                 jmp drawLoop
 
-@notColor:      cmp #$C3              ; Shift "C"
+@notColor:      cmp #KEY_C_SHIFT             ; Shift "C"VLINE
                 bne @notShiftC
                 jsr SetPrevScheme
                 jmp drawLoop
 
 @notShiftC:
-.endif
-                cmp #$44              ; Letter "D"
+.endif          
+                cmp #KEY_D                    ; "D"
                 bne @notDemo
                 jsr SwitchDemoMode
                 jmp drawLoop
 
-@notDemo:       cmp #$42              ; Letter "B"
+@notDemo:       cmp #KEY_B                    ; "B"
                 bne @notborder
-                jsr SwitchDemoMode    ;  HACHACK
+                jsr ToggleBorder
                 jmp drawLoop
 
-@notborder:     cmp #$03
+@notborder:     cmp #$03                      ; CTRL-C (ie: RUNSTOP key)
                 beq @exit
                 
                 jsr ShowHelp

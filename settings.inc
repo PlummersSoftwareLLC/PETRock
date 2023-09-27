@@ -1,4 +1,8 @@
+.ifdef COL80
+BSNSS_KBD       = 1       ; Set to 1 if you use a PET with a business keyboard. Default is 0 (graphical)
+.else
 BSNSS_KBD       = 0       ; Set to 1 if you use a PET with a business keyboard. Default is 0 (graphical)
+.endif
 DEBUG           = 0       ; Enable code that only is included for debug builds
 TIMING          = 0       ; Change border color to show drawing progress. Only supported on the C64
 SERIAL          = 1       ; Enable reading serial input from user port
