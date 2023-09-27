@@ -340,7 +340,7 @@ drawLoop:
 
 @notDemo:       cmp #$42              ; Letter "B"
                 bne @notborder
-                jsr ToggleBorder
+                jsr SwitchDemoMode    ;  HACHACK
                 jmp drawLoop
 
 @notborder:     cmp #$03
@@ -520,6 +520,9 @@ GotSerialPacket:
                 bne BogusData
 
                 lda SerialBuf+MAGIC_LEN
+                .ifdef COL80
+                asl
+                .endif
                 sta VU
 
                 PeakDataNibbles = SerialBuf + MAGIC_LEN + VU_LEN
@@ -606,6 +609,9 @@ FillPeaks:
                 sta zptmpB+1
                 ldy DataIndex
                 lda (zptmpB), y
+                .ifdef COL80
+                asl
+                .endif
                 sta VU
 
                 lda #1
@@ -1296,6 +1302,9 @@ FcColorMem:     lda #YSIZE-TOP_MARGIN-BOTTOM_MARGIN   ; Count of rows to paint c
 DrawBand:       sta Height            ; Height is height of bar itself
                 txa
                 asl
+                .ifdef COL80
+                asl
+                .endif
                 sta SquareX           ; Bar xPos on screen
 
                 ; Square Y will be the screen line number of the top of the bar
@@ -1322,8 +1331,9 @@ lineSwitch:     ldy SquareX           ; Y will be the X-pos (zp addr mode not su
                 cmp #YSIZE - BOTTOM_MARGIN - 1
                 bne @notlastline
                 lda Height            ; If 0 height, write blanks instead of band base
-                beq drawLastBlanks
-                cmp #1
+                bne :+
+                jmp drawLastBlanks
+:               cmp #1
                 beq drawOneLine
                 bne drawLastLine
 @notlastline:   cmp SquareY           ; Compare to screen line of top of bar
@@ -1334,6 +1344,12 @@ drawBlanks:
                 lda #' '
                 sta (zptmp),y
                 iny
+                .ifdef COL80
+                sta (zptmp),y
+                iny
+                sta (zptmp),y
+                iny
+                .endif
                 sta (zptmp),y
                 inc tempY
                 bne lineLoop
@@ -1341,6 +1357,13 @@ drawFirstLine:
                 lda CharDefs + visualDef::TOPLEFTSYMBOL
                 sta (zptmp),y
                 iny
+                .ifdef COL80
+                lda CharDefs + visualDef::TOPMIDDLESYMBOL               ; Draw center pieces on 80 column screens only
+                sta (zptmp),y
+                iny
+                sta (zptmp),y
+                iny
+                .endif
                 lda CharDefs + visualDef::TOPRIGHTSYMBOL
                 sta (zptmp),y
                 inc tempY
@@ -1349,6 +1372,13 @@ drawMiddleLine:
                 lda CharDefs + visualDef::VLINE1SYMBOL
                 sta (zptmp),y
                 iny
+                .ifdef COL80
+                lda CharDefs + visualDef::VLINE1MIDDLESYMBOL               ; Draw center pieces on 80 column screens only
+                sta (zptmp),y
+                iny
+                sta (zptmp),y
+                iny
+                .endif
                 lda CharDefs + visualDef::VLINE2SYMBOL
                 sta (zptmp),y
                 inc tempY
@@ -1359,6 +1389,13 @@ drawLastLine:
                 lda CharDefs + visualDef::BOTTOMLEFTSYMBOL
                 sta (zptmp),y
                 iny
+                .ifdef COL80
+                lda CharDefs + visualDef::BOTTOMMIDDLESYMBOL               ; Draw center pieces on 80 column screens only
+                sta (zptmp),y
+                iny
+                sta (zptmp),y
+                iny
+                .endif
                 lda CharDefs + visualDef::BOTTOMRIGHTSYMBOL
                 sta (zptmp),y
                 rts
@@ -1367,6 +1404,12 @@ drawOneLine:
                 lda CharDefs + visualDef::ONELINE1SYMBOL
                 sta (zptmp),y
                 iny
+                .ifdef COL80
+                sta (zptmp),y
+                iny
+                sta (zptmp),y
+                iny
+                .endif
                 lda CharDefs + visualDef::ONELINE2SYMBOL
                 sta (zptmp),y
                 rts
@@ -1374,6 +1417,12 @@ drawLastBlanks:
                 lda #' '
                 sta (zptmp),y
                 iny
+                .ifdef COL80
+                sta (zptmp),y
+                iny
+                sta (zptmp),y
+                iny
+                .endif
                 sta (zptmp),y
                 rts
 
@@ -1407,10 +1456,9 @@ PlotEx:
                 sty     CURS_X
                 stx     CURS_Y
                 ldy     CURS_Y
-                lda     ScrLo,y
+                lda     ScreenLineAddresses,y
                 sta     SCREEN_PTR
-                lda     ScrHi,y
-                ora     #$80           ; Screen at $8000
+                lda     ScreenLineAddresses+1,y
                 sta     SCREEN_PTR+1
                 rts
 
@@ -1667,25 +1715,25 @@ SetNextStyle:   lda NextStyle         ; Take the style index and multiply by 2
 
 SkinnyRoundStyle:                     ; PETSCII screen codes for round tube bar style
 .if C64
-  .byte 85, 73, 74, 75, 66, 66, 74, 75, 32, 32
+  .byte 85, 73, 74, 75, 66, 66, 74, 75, 32, 32, 32, 32, 32
 .endif
 .if PET
-  .byte 85, 73, 74, 75, 93, 93, 74, 75, 32, 32
+  .byte 85, 73, 74, 75, 93, 93, 74, 75, 32, 32, 67, 70, 32
 .endif
 
 DrawSquareStyle:                      ; PETSCII screen codes for square linedraw style
-  .byte 79, 80, 76, 122, 101, 103, 76, 122, 32, 32
+  .byte 111, 112, 76, 122, 101, 103, 76, 122, 32, 32, 247
 
 BreakoutStyle:                        ; PETSCII screen codes for style that looks like breakout
 .if C64
-  .byte 239, 250, 239, 250, 239, 250, 239, 250, 239, 250
+  .byte 239, 250, 239, 250, 239, 250, 239, 250, 239, 250, 32, 32, 32
 .endif
 .if PET
-  .byte 228, 250, 228, 250, 228, 250, 228, 250, 228, 250
+  .byte 228, 250, 228, 250, 228, 250, 228, 250, 228, 250, 32, 32, 32
 .endif
 
 CheckerboardStyle:                    ; PETSCII screen codes for checkerboard style
-  .byte 102, 92, 102, 92, 102, 92,102, 92, 102, 92
+  .byte 102, 92, 102, 92, 102, 92,102, 92, 102, 92, 32, 32, 32
 
 ; Lookup table - each of the above mini tables is listed in this lookup table so that
 ;                we can easily find items 0-3
@@ -1769,21 +1817,3 @@ HelpText1:      .literal "C: COLOR - S: STYLE - D: DEMO", 0
 HelpText1:      .literal "S: STYLE - D: DEMO", 0
 .endif
 HelpText2:      .literal "B: BORDER - RUN/STOP: EXIT", 0
-
-.if PET         ; This is used by the PlotEx routine for the PET
-
-; Screen address tables - offset to real screen
-
-.rodata
-
-ScrLo:  .byte   $00, $28, $50, $78, $A0, $C8, $F0, $18
-        .byte   $40, $68, $90, $B8, $E0, $08, $30, $58
-        .byte   $80, $A8, $D0, $F8, $20, $48, $70, $98
-        .byte   $C0
-
-ScrHi:  .byte   $00, $00, $00, $00, $00, $00, $00, $01
-        .byte   $01, $01, $01, $01, $01, $02, $02, $02
-        .byte   $02, $02, $02, $02, $03, $03, $03, $03
-        .byte   $03
-
-.endif

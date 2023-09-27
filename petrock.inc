@@ -93,8 +93,11 @@
 
     CLRSCR              = $E015
     YSIZE               = 25
+  .ifdef COL80
+    XSIZE               = 80
+  .else
     XSIZE               = 40
-
+  .endif
 .endif
         
 ; Includes --------------------------------------------------------------------------
@@ -127,19 +130,24 @@ CLRHOME             = $93               ; Clear screen
 ; Defines below this line should generally not require changing
 
 NUM_BANDS           = 16                ; 16 bands in the spectrum data
-MAX_VU              = 17                ; Maximum size per side of the VU meter
 
 ; Center the VU meter on the second screen line
 
 VUPOS1              = SCREEN_MEM + XSIZE + XSIZE / 2 + 1
+.ifdef COL80
+VUPOS2              = SCREEN_MEM + XSIZE + 6
+.else
 VUPOS2              = SCREEN_MEM + XSIZE + 2
+.endif
+
 .if C64
 VUCOLORPOS          = COLOR_MEM  + XSIZE + 2
 .endif
 
 ; Symbol definitions for square drawing - PETSCI for graphics that make a square 
 
-TOPLEFTSYMBOL       = 79                
+TOPLEFTSYMBOL       = 79       
+TOPMIDDLESYMBOL     = 247         
 TOPRIGHTSYMBOL      = 80
 BOTTOMLEFTSYMBOL    = 76
 BOTTOMRIGHTSYMBOL   = 122               
@@ -160,29 +168,40 @@ VUSYMBOL            = 244               ; Symbol for a filled VU square
 
 
 .struct visualDef
-  TOPLEFTSYMBOL     .byte
-  TOPRIGHTSYMBOL    .byte
-  BOTTOMLEFTSYMBOL  .byte
-  BOTTOMRIGHTSYMBOL .byte
-  VLINE1SYMBOL      .byte
-  VLINE2SYMBOL      .byte
-  HLINE1SYMBOL      .byte
-  HLINE2SYMBOL      .byte
-  ONELINE1SYMBOL    .byte
-  ONELINE2SYMBOL    .byte
+  TOPLEFTSYMBOL       .byte
+  TOPRIGHTSYMBOL      .byte
+  BOTTOMLEFTSYMBOL    .byte
+  BOTTOMRIGHTSYMBOL   .byte
+  VLINE1SYMBOL        .byte
+  VLINE2SYMBOL        .byte
+  HLINE1SYMBOL        .byte
+  HLINE2SYMBOL        .byte
+  ONELINE1SYMBOL      .byte
+  ONELINE2SYMBOL      .byte
+  TOPMIDDLESYMBOL     .byte
+  BOTTOMMIDDLESYMBOL  .byte
+  VLINE1MIDDLESYMBOL  .byte
 .endstruct
 VISUALDEF_SIZE = .sizeof(visualDef)
 
 ; Our UI Definitions ------------------------------------------------------
 
+.ifdef COL80
+LEFT_MARGIN         = 8
+RIGHT_MARGIN        = LEFT_MARGIN
+BAND_WIDTH          = 4
+TOP_MARGIN          = 3
+BOTTOM_MARGIN       = 4
+.else
 LEFT_MARGIN         = 4
 RIGHT_MARGIN        = LEFT_MARGIN
 BAND_WIDTH          = 2
 TOP_MARGIN          = 3
 BOTTOM_MARGIN       = 4
+.endif
 BAND_HEIGHT         = YSIZE-TOP_MARGIN-BOTTOM_MARGIN
 TEXT_WIDTH          = XSIZE-LEFT_MARGIN-RIGHT_MARGIN
-
+MAX_VU              = (((XSIZE-LEFT_MARGIN-RIGHT_MARGIN)/2)-1)
 
 ;----------------------------------------------------------------------------
 ; Common definitions for all Commodore BASICs
