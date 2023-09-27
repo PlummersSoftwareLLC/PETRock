@@ -1375,7 +1375,7 @@ drawMiddleLine:
                 sta (zptmp),y
                 iny
                 .ifdef COL80
-                lda CharDefs + visualDef::VLINE1MIDDLESYMBOL               ; Draw center pieces on 80 column screens only
+                lda CharDefs + visualDef::HLINE1MIDDLESYMBOL               ; Draw center pieces on 80 column screens only
                 sta (zptmp),y
                 iny
                 sta (zptmp),y
@@ -1442,7 +1442,7 @@ lineLoop:       lda zptmp             ; Advance zptmp by one screen line down
 ;-----------------------------------------------------------------------------------
 ;               X       Cursor Y Pos
 ;               Y       Cursor X Pos
-;               (NOTE Reversed)
+;               (NOTE Reversed) (No really, pay attention, they're BACKWARDS!)
 ;-----------------------------------------------------------------------------------
 
 PlotEx:
@@ -1715,27 +1715,36 @@ SetNextStyle:   lda NextStyle         ; Take the style index and multiply by 2
 ; and vertical lines needed to form a box. Finally, the characters to use for bands
 ; of height 1 are also specified.
 
+
 SkinnyRoundStyle:                     ; PETSCII screen codes for round tube bar style
 .if C64
-  .byte 85, 73, 74, 75, 66, 66, 74, 75, 32, 32, 32, 32, 32
+  ;     TL  TR  BL  BR  V1  V2  H1  H2  1L  1R  TM  BM  H1
+  .byte 85, 73, 74, 75, 66, 66, 74, 75, 32, 32,  0,  0,  0
 .endif
 .if PET
+  ;     TL  TR  BL  BR  V1  V2  H1  H2  1L  1R  TM  BM  H1
   .byte 85, 73, 74, 75, 93, 93, 74, 75, 32, 32, 67, 70, 32
 .endif
 
 DrawSquareStyle:                      ; PETSCII screen codes for square linedraw style
-  .byte 111, 112, 76, 122, 101, 103, 76, 122, 32, 32, 247
+      ; TL             TR              BL                BR                 V1            V2            
+  .byte TOPLEFTSYMBOL, TOPRIGHTSYMBOL, BOTTOMLEFTSYMBOL, BOTTOMRIGHTSYMBOL, VLINE1SYMBOL, VLINE2SYMBOL
+      ; H1                H2                 1L            1R            TM            BM            H1
+  .byte BOTTOMLEFTSYMBOL, BOTTOMRIGHTSYMBOL, HLINE1SYMBOL, HLINE2SYMBOL, HLINE1SYMBOL, HLINE2SYMBOL, 32
 
 BreakoutStyle:                        ; PETSCII screen codes for style that looks like breakout
 .if C64
-  .byte 239, 250, 239, 250, 239, 250, 239, 250, 239, 250, 32, 32, 32
+   ;     TL   TR   BL   BR   V1   V2   H1   H2   1L   1R  TM  BM  H1
+  .byte 239, 250, 239, 250, 239, 250, 239, 250, 239, 250, 0,   0,  0
 .endif
 .if PET
-  .byte 228, 250, 228, 250, 228, 250, 228, 250, 228, 250, 32, 32, 32
+   ;     TL   TR   BL   BR   V1   V2   H1   H2   1L   1R  TM    BM   H1
+  .byte 228, 250, 228, 250, 228, 250, 228, 250, 228, 250, 228, 228, 228
 .endif
 
 CheckerboardStyle:                    ; PETSCII screen codes for checkerboard style
-  .byte 102, 92, 102, 92, 102, 92,102, 92, 102, 92, 32, 32, 32
+   ;    TL   TR  BL   BR  V1   V2  H1   H2  1L   1R  TM   BM   H1
+  .byte 102, 92, 102, 92, 102, 92, 102, 92, 102, 92, 102, 102, 102
 
 ; Lookup table - each of the above mini tables is listed in this lookup table so that
 ;                we can easily find items 0-3

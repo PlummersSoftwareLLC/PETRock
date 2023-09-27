@@ -166,7 +166,7 @@ VUSYMBOL            = 244               ; Symbol for a filled VU square
 
 ; Classic Linedraw style
 
-
+; TL   TR   BL   BR   V1   V2   H1   H2   1L   1R   TM   BM   H1
 .struct visualDef
   TOPLEFTSYMBOL       .byte
   TOPRIGHTSYMBOL      .byte
@@ -180,7 +180,7 @@ VUSYMBOL            = 244               ; Symbol for a filled VU square
   ONELINE2SYMBOL      .byte
   TOPMIDDLESYMBOL     .byte
   BOTTOMMIDDLESYMBOL  .byte
-  VLINE1MIDDLESYMBOL  .byte
+  HLINE1MIDDLESYMBOL  .byte
 .endstruct
 VISUALDEF_SIZE = .sizeof(visualDef)
 
