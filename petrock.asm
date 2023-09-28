@@ -16,22 +16,22 @@
 ; process is repeated, running at about 40 fps.
 ;
 ; Color RAM can be filled with different patterns by stepping through the visual styles
-; with the C key, but it is not drawn each and every frame.  
+; with the C key, but it is not drawn each and every frame.
 ;
 ; Basic bar draw is to walk down the bar and draw a blank (when above the bar), the top
 ; of the bar, then the middle pieces, then the bottom.  A visual style definition is
 ; set that includes all of the PETSCII chars you need to draw a band, like the corners
 ; and sides, etc.  It can be changed with the S key.
-; 
+;
 ; Every frame the serial port is checked for incoming data which is then stored in the
 ; SerialBuf.  If that fills up without a nul it is reset, but if a nul comess in at the
 ; right place (right packet size) and the magic byte matches, it is used as new peakdata
 ; and stored in the PeakData table.  The code on the ESP32 sends it over as 16 nibbles
 ; packed into 8 bytes plus a VU value.
 ;
-; The built-in serial code on the C64 is poor, and serial/c64/driver.s contains a new 
+; The built-in serial code on the C64 is poor, and serial/c64/driver.s contains a new
 ; impl that works well for receiving data up to 4800 baud.
-; On the PET, built-in serial code is effectively absent. For the PET, 
+; On the PET, built-in serial code is effectively absent. For the PET,
 ; serial/c64/driver.s contains an implementation that is confirmed to receive data
 ; up to 2400 baud.
 ;
@@ -60,13 +60,13 @@ ScratchStart:
     tempY:           .res  1              ; Preserve Y Pos
     lineChar:        .res  1              ; Line draw char
     SquareX:         .res  1              ; Args for DrawSquare
-    SquareY:         .res  1  
-    Width:           .res  1  
+    SquareY:         .res  1
+    Width:           .res  1
     Height:          .res  1              ; Height of area to draw
     ClearHeight:     .res  1              ; Height of area to clear
     DataIndex:       .res  1              ; Index into fakedata for demo
     resultLo:        .res  1              ; Results from multiply operations
-    resultHi:        .res  1  
+    resultHi:        .res  1
     VU:              .res  1              ; VU Audio Data
     Peaks:           .res  NUM_BANDS      ; Peak Data for current frame
     NextStyle:       .res  1              ; The next style we will pick
@@ -97,7 +97,7 @@ ScratchStart:
   .endif
 .endif
 
-ScratchEnd: 
+ScratchEnd:
 
 .assert * <= SCRATCH_END, error           ; Make sure we haven't run off the end of the buffer
 
@@ -190,7 +190,7 @@ start:
                 ldy #>clrGREEN        ; Set cursor to green and clear screen, setting text
                 lda #<clrGREEN        ;   color to light green on the C64
                 jsr WriteLine
-                
+
                 jsr EmptyBorder       ; Draw the screen frame and decorations
                 jsr SetNextStyle      ; Select the first visual style
 
@@ -199,11 +199,11 @@ start:
 .endif
 
 .if SERIAL
-                jsr OpenSerial        ; Open the serial port for data from the ESP32   
+                jsr OpenSerial        ; Open the serial port for data from the ESP32
                 jsr StartSerial       ; Enable Serial!  Behold the power!
 .endif
 
-drawLoop:       
+drawLoop:
 
 .if SERIAL
                 jsr GetSerialChar
@@ -211,7 +211,7 @@ drawLoop:
                 bne @havebyte
                 cpx #<SER_ERR_NO_DATA
                 bne @havebyte
-                cpy #>SER_ERR_NO_DATA 
+                cpy #>SER_ERR_NO_DATA
                 beq @donedata
 
 @havebyte:      jsr GotSerial
@@ -240,7 +240,7 @@ drawLoop:
 
 @redraw:        lda RedrawFlag
                 beq @afterdraw        ; We didn't get a complete packet yet, so no point in drawing anything
-                lda #0 
+                lda #0
                 sta RedrawFlag        ; Acknowledge packet
 
                 jsr DrawVU            ; Draw the VU bar at the top of the screen
@@ -257,8 +257,8 @@ drawLoop:
                 dex
                 bpl :-
 
-.if PET         
-                jsr DownTextTimer     ; On the PET, decrease the text timer to compensate 
+.if PET
+                jsr DownTextTimer     ; On the PET, decrease the text timer to compensate
 .endif                                ;   for drawing time
 
 .if SERIAL && (C64 || (PET && SENDSTAR))
@@ -308,46 +308,46 @@ drawLoop:
 .else
                 jsr GETIN             ; No serial, use regular GETIN routine
 .endif
-                
+
                 cmp #0
                 bne @notEmpty
 
                 jmp drawLoop
 
-@notEmpty:      
-                
-                cmp #KEY_S                    ; "S"
+@notEmpty:
+
+                cmp #KEY_S
                 bne @notStyle
                 jsr SetNextStyle
                 jmp drawLoop
 
 @notStyle:
 .if C64         ; Color only available on C64
-                cmp #KEY_C                    ; "C"
+                cmp #KEY_C
                 bne @notColor
                 jsr SetNextScheme
                 jmp drawLoop
 
-@notColor:      cmp #KEY_C_SHIFT             ; Shift "C"VLINE
+@notColor:      cmp #KEY_C_SHIFT
                 bne @notShiftC
                 jsr SetPrevScheme
                 jmp drawLoop
 
 @notShiftC:
-.endif          
-                cmp #KEY_D                    ; "D"
+.endif
+                cmp #KEY_D
                 bne @notDemo
                 jsr SwitchDemoMode
                 jmp drawLoop
 
-@notDemo:       cmp #KEY_B                    ; "B"
+@notDemo:       cmp #KEY_B
                 bne @notborder
                 jsr ToggleBorder
                 jmp drawLoop
 
-@notborder:     cmp #$03                      ; CTRL-C (ie: RUNSTOP key)
+@notborder:     cmp #KEY_RUNSTOP
                 beq @exit
-                
+
                 jsr ShowHelp
                 jmp drawLoop
 
@@ -423,7 +423,7 @@ EmptyBorder:    lda #0
 ; ClearBorder   Remove border and decorations
 ;-----------------------------------------------------------------------------------
 
-ClearBorder:    
+ClearBorder:
                 lda #<SCREEN_MEM
                 sta zptmp
                 lda #>SCREEN_MEM
@@ -444,7 +444,7 @@ ClrBorderMem:   ldy #XSIZE-1          ; Top line
                 lda zptmp+1
                 adc #0
                 sta zptmp+1
-                
+
                 lda #' '
                 ldy #0
                 sta (zptmp),y
@@ -474,22 +474,22 @@ ClrBorderMem:   ldy #XSIZE-1          ; Top line
 .if SERIAL
 
 ;-----------------------------------------------------------------------------------
-; GotSerial     Process incoming serial bytes from the ESP32 
+; GotSerial     Process incoming serial bytes from the ESP32
 ;-----------------------------------------------------------------------------------
 ; Store character in serial buffer. Processes packet if character completes it.
 ;-----------------------------------------------------------------------------------
 
 GotSerial:      ldy SerialBufPos
-                cpy #SerialBufLen      
+                cpy #SerialBufLen
                 bne @nooverflow
                 ldy #0
                 sty SerialBufPos
                 rts
-@nooverflow:                    
+@nooverflow:
                 sta SerialBuf, y
                 iny
                 sty SerialBufPos
-                
+
                 cmp #00                   ; Look for carriage return meaning end
                 beq :+
                 rts                       ; No CR, back to caller
@@ -515,23 +515,23 @@ BogusData:
 ;                   the first two bytes.  Data Packet? Dave Plummer?  You decide!
 ;-----------------------------------------------------------------------------------
 
-GotSerialPacket: 
+GotSerialPacket:
                 ldy SerialBufPos          ; Get received packet length
                 lda SerialBuf             ; Look for 'D'
                 cmp #MAGIC_BYTE_0
                 bne BogusData
 
                 lda SerialBuf+MAGIC_LEN
-                .ifdef COL80
+                .if COL80
                 asl
                 .endif
                 sta VU
 
                 PeakDataNibbles = SerialBuf + MAGIC_LEN + VU_LEN
-        
+
                 ldy #0
                 ldx #0
-                
+
 :               lda PeakDataNibbles, y    ; Get the next byte from the buffer
                 and #%11110000            ; Get the top nibble
                 lsr
@@ -540,7 +540,7 @@ GotSerialPacket:
                 lsr
                 clc
                 adc #1                    ; Add one to values
-                
+
                 sta Peaks+1, x            ; Store it in the peaks table
                 lda PeakDataNibbles, y    ; Get that SAME byte from the buffer
                 and #%00001111            ; Now we want the low nibble
@@ -568,7 +568,7 @@ GotSerialPacket:
 ; and vu value
 ;-----------------------------------------------------------------------------------
 
-FillPeaks:      
+FillPeaks:
 .if .not (PET && SERIAL)
                 lda DemoToggle
                 eor #$01
@@ -577,7 +577,7 @@ FillPeaks:
 
                 rts
 
-@proceed:       
+@proceed:
 .endif
                 tya
                 pha
@@ -611,7 +611,7 @@ FillPeaks:
                 sta zptmpB+1
                 ldy DataIndex
                 lda (zptmpB), y
-                .ifdef COL80
+                .if COL80
                 asl
                 .endif
                 sta VU
@@ -832,14 +832,14 @@ PutText:
                 dey
 
                 tya                   ; Calculate number of spaces to center text
-                clc 
+                clc
                 sbc #TEXT_WIDTH       ; Subtract screen width from text length and invert
                 eor #$ff              ;   negative result to get total whitespaces around
                 lsr                   ;   text. Divide that by 2.
-                
+
                 tax
                 tay
-                
+
                 lda #' '              ; Write leading whitespace
 :               jsr CHROUT
                 dey
@@ -1158,11 +1158,11 @@ SetPrevScheme:
                 sta zptmpB
                 lda #>BandSchemeTable
                 sta zptmpB+1
-                
+
                 ldy #1                ; Prep for first scheme table entry
 
 @loop:          iny                   ; Move on to next table entry
-                
+
                 lda (zptmpB),y        ; Check if we hit the null pointer
                 iny
                 ora (zptmpB),y
@@ -1235,7 +1235,7 @@ FcColorMem:     lda #YSIZE-TOP_MARGIN-BOTTOM_MARGIN   ; Count of rows to paint c
                 tay
                 lda (zptmpB),y
                 tax
-                iny 
+                iny
                 lda (zptmpB),y
 
                 stx zptmpB            ; ...and make that the new base address in zptmpB
@@ -1296,15 +1296,15 @@ FcColorMem:     lda #YSIZE-TOP_MARGIN-BOTTOM_MARGIN   ; Count of rows to paint c
 ;               No dynamic color memory
 ;               Band Width of 2
 ;
-; Walks down the screen and depending on whether the current pos is above, equal, or 
-; below the bar itself, draws blanks, the bar top, the bar middle, bar bottom or 
+; Walks down the screen and depending on whether the current pos is above, equal, or
+; below the bar itself, draws blanks, the bar top, the bar middle, bar bottom or
 ; "single-height" characters
 ;-----------------------------------------------------------------------------------
 
 DrawBand:       sta Height            ; Height is height of bar itself
                 txa
                 asl
-                .ifdef COL80
+                .if COL80
                 asl
                 .endif
                 sta SquareX           ; Bar xPos on screen
@@ -1346,7 +1346,7 @@ drawBlanks:
                 lda #' '
                 sta (zptmp),y
                 iny
-                .ifdef COL80
+                .if COL80
                 sta (zptmp),y
                 iny
                 sta (zptmp),y
@@ -1359,7 +1359,7 @@ drawFirstLine:
                 lda CharDefs + visualDef::TOPLEFTSYMBOL
                 sta (zptmp),y
                 iny
-                .ifdef COL80
+                .if COL80
                 lda CharDefs + visualDef::TOPMIDDLESYMBOL               ; Draw center pieces on 80 column screens only
                 sta (zptmp),y
                 iny
@@ -1374,7 +1374,7 @@ drawMiddleLine:
                 lda CharDefs + visualDef::VLINE1SYMBOL
                 sta (zptmp),y
                 iny
-                .ifdef COL80
+                .if COL80
                 lda CharDefs + visualDef::HLINE1MIDDLESYMBOL               ; Draw center pieces on 80 column screens only
                 sta (zptmp),y
                 iny
@@ -1391,7 +1391,7 @@ drawLastLine:
                 lda CharDefs + visualDef::BOTTOMLEFTSYMBOL
                 sta (zptmp),y
                 iny
-                .ifdef COL80
+                .if COL80
                 lda CharDefs + visualDef::BOTTOMMIDDLESYMBOL               ; Draw center pieces on 80 column screens only
                 sta (zptmp),y
                 iny
@@ -1406,7 +1406,7 @@ drawOneLine:
                 lda CharDefs + visualDef::ONELINE1SYMBOL
                 sta (zptmp),y
                 iny
-                .ifdef COL80
+                .if COL80
                 sta (zptmp),y
                 iny
                 sta (zptmp),y
@@ -1419,7 +1419,7 @@ drawLastBlanks:
                 lda #' '
                 sta (zptmp),y
                 iny
-                .ifdef COL80
+                .if COL80
                 sta (zptmp),y
                 iny
                 sta (zptmp),y
@@ -1453,11 +1453,13 @@ PlotEx:
 :               jmp     PLOT          ; Get cursor position
 .endif
 
-.if PET         ; PET has no PLOT in kernal. This code is loaned from CC65's CLIB routines
+.if PET         ; PET has no PLOT in kernal.
                 bcs     @fetch         ; Fetch values if carry set
                 sty     CURS_X
                 stx     CURS_Y
-                ldy     CURS_Y
+                txa
+                asl
+                tay
                 lda     ScreenLineAddresses,y
                 sta     SCREEN_PTR
                 lda     ScreenLineAddresses+1,y
@@ -1476,7 +1478,7 @@ PlotEx:
 ;
 ; This routine figures out whether the C64 is connected to a 50Hz or 60Hz
 ; external frequency source - that traditionally being the power grid the
-; AC adapter is connected to. It needs to know this to make the CIA time of 
+; AC adapter is connected to. It needs to know this to make the CIA time of
 ; day clock run at the right speed; getting it wrong makes the clock 20% off.
 ; This routine was effectively sourced from the following web page:
 ; https://codebase64.org/doku.php?id=base:efficient_tod_initialisation
@@ -1497,7 +1499,7 @@ InitTODClocks:
                 lda #$ff                ; Count down from $ffff (65535)
                 sta CIA2_TA             ; Use timer A
                 sta CIA2_TA+1
-            
+
                 lda #%00010001          ; Set TOD to 60Hz mode and start the
                 sta CIA2_CRA            ;   timer.
 
@@ -1557,7 +1559,7 @@ StartTextTimer:
 .if PET         ; We use a more rudimentary countdown timer on the PET
                 lda #$00
                 sta TextCountDown
-  .if SERIAL    ; 
+  .if SERIAL    ;
                 lda #$20                ; Serial handling takes time, so we count
   .else                                 ;   down from a lower value than when
                 lda #$40                ;   serial is disabled
@@ -1576,7 +1578,7 @@ DownTextTimer:
                 lda TextTimeout
                 beq @done
 
-                dec TextCountDown+1     ; We take off 384 just because that seems 
+                dec TextCountDown+1     ; We take off 384 just because that seems
                 beq @atzero             ;   to work out about right for one screen
                 lda TextCountDown       ;   redraw.
                 sec
@@ -1727,7 +1729,7 @@ SkinnyRoundStyle:                     ; PETSCII screen codes for round tube bar 
 .endif
 
 DrawSquareStyle:                      ; PETSCII screen codes for square linedraw style
-      ; TL             TR              BL                BR                 V1            V2            
+      ; TL             TR              BL                BR                 V1            V2
   .byte TOPLEFTSYMBOL, TOPRIGHTSYMBOL, BOTTOMLEFTSYMBOL, BOTTOMRIGHTSYMBOL, VLINE1SYMBOL, VLINE2SYMBOL
       ; H1                H2                 1L            1R            TM            BM            H1
   .byte BOTTOMLEFTSYMBOL, BOTTOMRIGHTSYMBOL, HLINE1SYMBOL, HLINE2SYMBOL, HLINE1SYMBOL, HLINE2SYMBOL, 32
@@ -1768,7 +1770,7 @@ StyleTable:
 ;   to left.
 ;-----------------------------------------------------------------------------------
 
-BandSchemeTable: 
+BandSchemeTable:
                 .word RainbowScheme
                 .word WhiteScheme
                 .word GreenScheme

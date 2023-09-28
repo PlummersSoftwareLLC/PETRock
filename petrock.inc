@@ -30,19 +30,19 @@
 
     BASE                = $0801     ; C64 Start of BASIC
     PROGRAM             = $0900     ; Start of actual program
-                
+
     zptmp               = $FB
     zptmpB              = $FD
     zptmpC              = $22
-                
+
     TEXT_COLOR          = $0286   ; Current output color
     SCRATCH_START       = $033C   ; Datasette buffer
-    SCRATCH_END         = $03FB   ; End of datasette buffer  
+    SCRATCH_END         = $03FB   ; End of datasette buffer
     SCREEN_MEM          = $0400   ; Screen buffer of 1000 bytes
-        
-    RASTHI              = $D011  ; Hiword of screen raster   
+
+    RASTHI              = $D011  ; Hiword of screen raster
     RASTLO              = $D012  ; Loword of screen raster
-    
+
     COLOR_MEM           = $d800   ; Screen color memory of 1000 bytes
     TIMERSCALE          = 1022    ; Clock runs at 1.022MHz
 
@@ -93,13 +93,13 @@
 
     CLRSCR              = $E015
     YSIZE               = 25
-  .ifdef COL80
+  .if COL80
     XSIZE               = 80
   .else
     XSIZE               = 40
   .endif
 .endif
-        
+
 ; Includes --------------------------------------------------------------------------
 
     .include        "cbm_kernal.inc"
@@ -118,7 +118,7 @@
     DATA_LEN            = 8       ; Size of Data portion
     VU_LEN              = 1       ; Size of VU
     PACKET_LENGTH       = MAGIC_LEN + DATA_LEN + VU_LEN + 1 ; NUL terminated so +1
-.endif 
+.endif
 
 ; System Definition -----------------------------------------------------------------
 
@@ -134,7 +134,7 @@ NUM_BANDS           = 16                ; 16 bands in the spectrum data
 ; Center the VU meter on the second screen line
 
 VUPOS1              = SCREEN_MEM + XSIZE + XSIZE / 2 + 1
-.ifdef COL80
+.if COL80
 VUPOS2              = SCREEN_MEM + XSIZE + 6
 .else
 VUPOS2              = SCREEN_MEM + XSIZE + 2
@@ -144,13 +144,13 @@ VUPOS2              = SCREEN_MEM + XSIZE + 2
 VUCOLORPOS          = COLOR_MEM  + XSIZE + 2
 .endif
 
-; Symbol definitions for square drawing - PETSCI for graphics that make a square 
+; Symbol definitions for square drawing - PETSCI for graphics that make a square
 
-TOPLEFTSYMBOL       = 79       
-TOPMIDDLESYMBOL     = 247         
+TOPLEFTSYMBOL       = 79
+TOPMIDDLESYMBOL     = 247
 TOPRIGHTSYMBOL      = 80
 BOTTOMLEFTSYMBOL    = 76
-BOTTOMRIGHTSYMBOL   = 122               
+BOTTOMRIGHTSYMBOL   = 122
 VLINE1SYMBOL        = 101               ; Vertical line left side
 VLINE2SYMBOL        = 103               ; Vertical line right side
 .if C64
@@ -186,23 +186,16 @@ VISUALDEF_SIZE = .sizeof(visualDef)
 
 ; Our keyboard definitions ------------------------------------------------
 
-.if BSNSS_KBD
-KEY_S           = $73
-KEY_C           = $63
-KEY_C_SHIFT     = $C3
-KEY_D           = $64
-KEY_B           = $62
-.else
 KEY_S           = $53
 KEY_C           = $43
 KEY_C_SHIFT     = $C3
-KEY_D           = $44   
+KEY_D           = $44
 KEY_B           = $42
-.endif
+KEY_RUNSTOP     = $03
 
 ; Our UI Definitions ------------------------------------------------------
 
-.ifdef COL80
+.if COL80
 LEFT_MARGIN         = 8
 RIGHT_MARGIN        = LEFT_MARGIN
 BAND_WIDTH          = 4
