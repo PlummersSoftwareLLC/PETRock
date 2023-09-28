@@ -1,6 +1,6 @@
 .ifdef COL80
     .if COL80
-BSNSS_KBD       = 1       ; If 80 columns is flagged via command-line, assume 80 columns
+BSNSS_KBD       = 1       ; If 80 columns is flagged via command-line, assume we have a business keyboard
     .endif
 .else
 COL80           = 0       ; Set to 1 if you use a PET with an 80 column display. Default is 0 (40 columns)

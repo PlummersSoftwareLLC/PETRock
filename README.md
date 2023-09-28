@@ -10,7 +10,7 @@ The application logic is implemented in [petrock.asm](petrock.asm). It pulls in 
 
 The application draws 16 vertical bands of the spectrum analyzer which can be up to 16 high. The program first clears the screen, draws the border and text, fills in color, and the main draw loop calls DrawBand for each one in turn. Each frame draws a new set of peaks from the PeakData table, which has 16 entries, one per band. That data is replaced either by a new frame of demo data or an incoming serial packet and the process is repeated, running at about 40 fps.
 
-Color RAM can be filled with different patterns by stepping through the visual styles with the C key, but it is not drawn each and every frame.  
+Color RAM can be filled with different patterns by stepping through the visual styles with the C key, but it is not drawn each and every frame.
 
 Basic bar draw is to walk down the bar and draw a blank (when above the bar), the top of the bar, then the middle pieces, then the bottom. A visual style definition is set that includes all of the PETSCII chars you need to draw a band, like the corners and sides, etc. It can be changed with the S key.
 
@@ -26,6 +26,7 @@ Concerning handling of serial input:
 In the [`settings.inc`](settings.inc) file, a number of symbols are defined that can be used to configure the build:
 |Name|Possible values|Mandatory|Meaning|
 |-|-|-|-|
+|COL80|0 or 1|No|Set to 1 if your machine is fitted with an 80 column screen.|
 |BSNSS_KBD|0 or 1|Yes, on the PET|Set to 0 to indicate your PET has a graphical keyboard. Set to 1 to indicate it has a business keyboard. This setting is ignored on the C64.|
 |C64|0 or 1|No|Configure build for the Commodore 64. Exactly one of C64 or PET **must** be defined to equal 1.|
 |DEBUG|0 or 1|Yes|Set to 1 to enable code that only is included for debug builds.|
@@ -57,7 +58,7 @@ With the cc65 toolkit installed and in your PATH, you can build the application 
   ```text
   cl65 -o petrock.prg --asm-define C64=1 -t none petrock.asm
   ```
-  
+
 ## Loading and running
 
 Assuming the petrock.prg file is on a disk in device 8, the spectrum analyzer display can be loaded using the following command:
