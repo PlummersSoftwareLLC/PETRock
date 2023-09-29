@@ -1,4 +1,15 @@
+.ifdef COL80
+    .if COL80
+BSNSS_KBD       = 1       ; If 80 columns is flagged via command-line, assume we have a business keyboard
+    .endif
+.else
+COL80           = 0       ; Set to 1 if you use a PET with an 80 column display. Default is 0 (40 columns)
+.endif
+
+.ifndef BSNSS_KBD
 BSNSS_KBD       = 0       ; Set to 1 if you use a PET with a business keyboard. Default is 0 (graphical)
+.endif
+
 DEBUG           = 0       ; Enable code that only is included for debug builds
 TIMING          = 0       ; Change border color to show drawing progress. Only supported on the C64
 SERIAL          = 1       ; Enable reading serial input from user port

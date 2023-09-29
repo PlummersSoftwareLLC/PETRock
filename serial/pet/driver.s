@@ -157,7 +157,7 @@ StartSerial:
 ; state.
 ;-----------------------------------------------------------------------------------
 
-CloseSerial:    
+CloseSerial:
                 sei                   ; Disable interrupts
 
                 ; Restore IRQ vector init values
@@ -556,7 +556,7 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
                 jsr PollKeyboard      ; Do keyboard polling
                 jmp @keyend
 
-.else           ; 1200 Bd or higher => poll individual rows 
+.else           ; 1200 Bd or higher => poll individual rows
 
                 ; The following code counts down from a baud-based value (higher baudrate
                 ;   means higher value), until it reaches 11. That triggers the setting up
@@ -619,7 +619,7 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
 ;-----------------------------------------------------------------------
 ; Static data
 
-                ; Baud rate timer values, 1x baud rate  
+                ; Baud rate timer values, 1x baud rate
                 ;     110  300  600 1200 2400 4800 9600
 BaudTblLo:      .byte $83, $05, $83, $41, $A1, $D0, $68
 BaudTblHi:      .byte $23, $0D, $06, $03, $01, $00, $00
@@ -658,16 +658,17 @@ Log2Tbl:        .byte 255,7,6,6,5,5,5,5,4,4,4,4,4,4,4,4
 .if BSNSS_KBD
 
                 ; Matrix for Business Keyboards
-KbdMatrix:      .byte '@', $0E, $F3, '8', '-', '8', '5', '2'    ; $8E = BothShift+2, $1D = CursRight
-                .byte '9', $EF, '^', '7', '0', '7', '4', '1'
-                .byte '5', '\', 'k', ';', 'h', 'f', 's', $1B    ; $9B = ESC
-                .byte '6', '[', 'l', $0D, 'j', 'g', 'd', 'a'
-                .byte $08, 'p', 'i', '@', 'y', 'r', 'w', $09    ; $C0 = nonshiftable ., $FF= nonshift DEL
-                .byte '4', ']', 'o', $F2, 'u', 't', 'e', 'q'  ; $91 = CursUP.
-                .byte '3', $00, $19, '.', '.', 'b', 'c', $00    ; $AE-> KP.
-                .byte '2', $04, $0F, '0', $2C, 'n', 'v', 'z'    ; Repeat->^D, $0F = Z+A+L??
-                .byte '1', '/', $15, $F0, 'm', ' ', 'x', $FF    ; $15 - RVS + A + L??, B1 = KP1
-                .byte $16, $EF, ':', $03, '9', '6', '3', $08    ; $88 Left Arrow to BS?, ^V=TAB+<-+DEL
+KbdMatrix:      .byte $05, $0E, $1D, $B8, $2D, $38, $35, $32    ; $0E = both shift + 2, $1D = cursor right
+                .byte $B9, $EF, $DE, $B7, $30, $37, $34, $31
+                .byte $B5, $3B, $4B, $DD, $48, $46, $53, $9B    ; $9B = ESC
+                .byte $B6, $C0, $4C, $0D, $4A, $47, $44, $41    ; $0D = return
+                .byte $14, $50, $49, $DC, $59, $52, $57, $09    ; $14 = DEL, $09 = TAB
+                .byte $B4, $DB, $4F, $11, $55, $54, $45, $51    ; $11 = cursor down
+                .byte $B3, $00, $19, $AE, $2E, $42, $43, $00    ; $19 = left shift + TAB + I, $AE = keypad .
+                                                                ; $00 = right shift, left shift, in order
+                .byte $B2, $10, $0F, $B0, $2C, $4E, $56, $5A    ; $0F = Z + A + L, $10 = repeat
+                .byte $B1, $2F, $15, $13, $4D, $20, $58, $12    ; $15 - RVS + A + L, $13 = HOME, $12 = RVS
+                .byte $16, $04, $3A, $03, $39, $36, $33, $DF    ; $16 = TAB + <- + DEL, $03 = STOP, $DF = left arrow
 
                 ; Keymasks to remove modifers from the scan results
                 ; There are backward of the table above! Above goes from 9->0, these are 0->9
@@ -679,30 +680,30 @@ CtrlMask:       .byte $00, $00, $00, $00, $00, $00, $00, $00, $01, $00
 
                 ; Keyboard matrix with shift pressed, needed for consistent shifts
                 ; Matrix for Business Keyboards
-KbdMatrixShift: .byte '>', $0E, $F4, '8', '=', '(', '%', '"'    ;" ;$8E = BothShift+2, $9D = CursRight
-                .byte '9', $EF, '^', '7', '0', $27, '$', '!'
-                .byte '5', '|', 'K', '+', 'H', 'F', 'S', $1B    ; $1B = ESC
-                .byte '6', '{', 'L', $0D, 'J', 'G', 'D', 'A'
-                .byte $08, 'P', 'I', '@', 'Y', 'R', 'W', $09    ; $C0 = nonshiftable ., $FF= nonshift DEL
-                .byte '4', '}', 'O', $F1, 'U', 'T', 'E', 'Q'    ; $91 = CursUP
-                .byte '3', $00, $19, '.', '>', 'B', 'C', $00    ; $AE-> KP.
-                .byte '2', $04, $0F, '0', '<', 'N', 'V', 'Z'    ; Repeat->^D, $0F = Z+A+L??
-                .byte '1', '?', $15, $F0, 'M', ' ', 'X', $FF    ; $15 - RVS + A + L??, B1 = KP1
-                .byte $16, $EF, '*', $83, ')', '&', '#', $08    ; $88 Left Arrow to BS?, ^V=TAB+<-+DEL
+KbdMatrixShift: .byte '>', $0E, $F4, $B8, '=', '(', '%', '"'
+                .byte $B9, $EF, '^', $B7, $B0, $27, '$', '!'
+                .byte $B5, '|', $CB, '+', $C8, $C6, $D3, $9B
+                .byte $B6, '{', $CC, $0D, $CA, $C7, $C4, $C1
+                .byte $08, $D0, $C9, '@', $D9, $D2, $D7, $09
+                .byte $B4, '}', $CF, $F1, $D5, $D4, $C5, $D1
+                .byte $B3, $00, $19, '.', '>', $C2, $C3, $00
+                .byte $B2, $04, $0F, $B0, '<', $CE, $D6, $DA
+                .byte $B1, '?', $15, $F0, $CD, $20, $D8, $12
+                .byte $16, $EF, '*', $83, ')', '&', '#', $DF
 
 .else
 
                 ; Matrix for Graphics keyboards
-KbdMatrix:      .byte $F3, $F0, $5F, '(', '&', '%', '#', '!'
-                .byte $08, $F2, $EF, ')', '\', "'", '$', '"'    ;" ; (Appease the syntax highlighter)
-                .byte '9', '7', '^', 'O', 'U', 'T', 'E', 'Q'
-                .byte '/', '8', $EF, 'P', 'I', 'Y', 'R', 'W'
-                .byte '6', '4', $EF, 'L', 'J', 'G', 'D', 'A'
-                .byte '*', '5', $EF, ':', 'K', 'H', 'F', 'S'
-                .byte '3', '1', $0D, ';', 'M', 'B', 'C', 'Z'
-                .byte '+', '2', $EF, '?', ',', 'N', 'V', 'X'
-                .byte '-', '0', $00, '>', $FF, ']', '@', $00
-                .byte '=', '.', $EF, $03, '<', ' ', '[', $FF
+KbdMatrix:      .byte $1D, $13, $5F, $28, $26, $25, $23, $21
+                .byte $14, $11, $FF, $29, $5C, $27, $24, $22
+                .byte $39, $37, $5E, $4F, $55, $54, $45, $51
+                .byte $2F, $38, $FF, $50, $49, $59, $52, $57
+                .byte $36, $34, $FF, $4C, $4A, $47, $44, $41
+                .byte $2A, $35, $FF, $3A, $4B, $48, $46, $53
+                .byte $33, $31, $0D, $3B, $4D, $42, $43, $5A
+                .byte $2B, $32, $EF, $3F, $2C, $4E, $56, $58
+                .byte $2D, $30, $00, $3E, $FF, $5D, $40, $00
+                .byte $3D, $2E, $FF, $03, $3C, $20, $5B, $12
 
                 ; $88 (08) is on DEL, (Should be $94/$14)
                 ; $5f (_) is on the <- key?
@@ -717,14 +718,14 @@ CtrlMask:       .byte $00, $00, $00, $00, $00, $00, $00, $00, $08, $01
                 ; Keyboard matrix with shift pressed, needed for consistent shifts
                 ; Matrix for Graphics keyboards
 KbdMatrixShift: .byte $F4, $F0, $5F, '(', '&', '%', '#', '!'
-                .byte $08, $F1, $EF, ')', '\', '`', '$', '"'   ;";
-                .byte '9', '7', '|', $CF, $D5, $D4, $C5, $D1
-                .byte '/', '8', $EF, $D0, $C9, $D9, $D2, $D7
-                .byte '6', '4', $EF, $CC, $CA, $C7, $C4, $C1
-                .byte '*', '5', $EF, ':', $CB, $C8, $C6, $D3
-                .byte '3', '1', $0D, ';', $CD, $C2, $C3, $DA
-                .byte '+', '2', $EF, '?', ',', $CE, $D6, $D8
-                .byte '-', '0', $00, '>', $FF, '}', '~', $00
-                .byte '=', '.', $EF, $03, '<', ' ', '{', $FF
+                .byte $08, $F1, $FF, ')', '\', '`', '$', '"'
+                .byte $39, $37, '|', $CF, $D5, $D4, $C5, $D1
+                .byte $2F, $38, $FF, $D0, $C9, $D9, $D2, $D7
+                .byte $36, $34, $FF, $CC, $CA, $C7, $C4, $C1
+                .byte $2A, $35, $FF, ':', $CB, $C8, $C6, $D3
+                .byte $33, $31, $0D, ';', $CD, $C2, $C3, $DA
+                .byte $2B, $32, $FF, '?', ',', $CE, $D6, $D8
+                .byte $2D, $30, $00, '>', $FF, '}', '~', $00
+                .byte $3D, $2E, $FF, $03, '<', ' ', '{', $FF
 
 .endif
