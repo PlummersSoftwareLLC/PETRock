@@ -13,7 +13,8 @@
 ; main draw loop calls DrawBand for each one in turn.  Each frame draws a new set of
 ; peaks from the PeakData table, which has 16 entries, one per band.  That data is
 ; replaced either by a new frame of demo data or an incoming serial packet and the
-; process is repeated, running at about 40 fps.
+; process is repeated.  At 2400 baud, the serial link carries about 21 packets per
+; second.
 ;
 ; Color RAM can be filled with different patterns by stepping through the visual styles
 ; with the C key, but it is not drawn each and every frame.
@@ -24,10 +25,10 @@
 ; and sides, etc.  It can be changed with the S key.
 ;
 ; Every frame the serial port is checked for incoming data which is then stored in the
-; SerialBuf.  If that fills up without a nul it is reset, but if a nul comess in at the
-; right place (right packet size) and the magic byte matches, it is used as new peakdata
-; and stored in the PeakData table.  The code on the ESP32 sends it over as 16 nibbles
-; packed into 8 bytes plus a VU value.
+; SerialBuf.  Packets have a fixed size.  If a packet starts with the magic byte and
+; ends with a nul, it is used as new peakdata and stored in the PeakData table.  If
+; not, bytes are skipped until the next nul, after which a new packet is expected.  The
+; code on the ESP32 sends it over as 16 nibbles packed into 8 bytes plus a VU value.
 ;
 ; The built-in serial code on the C64 is poor, and serial/c64/driver.s contains a new
 ; impl that works well for receiving data up to 4800 baud.
@@ -477,50 +478,54 @@ ClrBorderMem:   ldy #XSIZE-1          ; Top line
 ; GotSerial     Process incoming serial bytes from the ESP32
 ;-----------------------------------------------------------------------------------
 ; Store character in serial buffer. Processes packet if character completes it.
+;
+; Packets have a fixed length, and the data in them can contain NUL bytes. So we
+; only accept a packet if its first byte is the magic byte and its last byte is the
+; NUL terminator. If a packet fails that check, we've lost track of where packets
+; start. We then skip bytes until the next NUL, and start a new packet after it.
 ;-----------------------------------------------------------------------------------
 
 GotSerial:      ldy SerialBufPos
-                cpy #SerialBufLen
-                bne @nooverflow
-                ldy #0
+                bmi @skipping             ; SerialBufPos is $FF while we skip to a NUL
+                bne @store                ; Not the first byte of a packet
+
+                cmp #MAGIC_BYTE_0         ; A packet must start with the magic byte
+                beq @store
+                cmp #00                   ; If this is a NUL, a packet may follow it
+                beq @done
+                dey                       ; Otherwise, skip to the next NUL
                 sty SerialBufPos
                 rts
-@nooverflow:
-                sta SerialBuf, y
+
+@skipping:      cmp #00                   ; Found the NUL we were looking for?
+                bne @done                 ;  Nope - Keep skipping
+                iny                       ;  Yep - Next byte should start a packet
+                sty SerialBufPos
+                rts
+
+@store:         sta SerialBuf, y
                 iny
-                sty SerialBufPos
-
-                cmp #00                   ; Look for carriage return meaning end
-                beq :+
-                rts                       ; No CR, back to caller
-
-:               cpy SerialBufPos          ; Are we in the right char pos for it?
-                beq :+                    ;  Yep - Process packet
-                ldy #0                    ;  Nope - Restart filling buffer
-                sty SerialBufPos
-                beq @done
-
-:               jsr GotSerialPacket
-
+                cpy #SerialBufLen         ; Do we have a complete packet?
+                beq @complete
+                sty SerialBufPos          ;  Nope - Wait for more
 @done:          rts
 
-BogusData:
-                ldy #0
+@complete:      ldy #0                    ; Next packet fills the buffer from the start
+                sty SerialBufPos
+
+                cmp #00                   ; Last byte must be the NUL terminator
+                beq GotSerialPacket
+
+                dey                       ; Not a valid packet, so skip to the next NUL
                 sty SerialBufPos
                 rts
 
 ;-----------------------------------------------------------------------------------
-; GotSerialPacket - Recieved a string followed by a carriage return so inspect it
-;                   to see if it could be a data packet, as indicated by 'DP' as
-;                   the first two bytes.  Data Packet? Dave Plummer?  You decide!
+; GotSerialPacket - Unpack a complete data packet, as indicated by the 'DP' in the
+;                   nibbles of the first byte.  Data Packet? Dave Plummer?  You decide!
 ;-----------------------------------------------------------------------------------
 
 GotSerialPacket:
-                ldy SerialBufPos          ; Get received packet length
-                lda SerialBuf             ; Look for 'D'
-                cmp #MAGIC_BYTE_0
-                bne BogusData
-
                 lda SerialBuf+MAGIC_LEN
                 .if COL80
                 asl

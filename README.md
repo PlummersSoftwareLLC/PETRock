@@ -8,13 +8,13 @@ A spectrum analyzer display for the C64 and the PET that receives its data from 
 
 The application logic is implemented in [petrock.asm](petrock.asm). It pulls in a few supporting include files to define symbols, add demo data, and facilitate serial communication.
 
-The application draws 16 vertical bands of the spectrum analyzer which can be up to 16 high. The program first clears the screen, draws the border and text, fills in color, and the main draw loop calls DrawBand for each one in turn. Each frame draws a new set of peaks from the PeakData table, which has 16 entries, one per band. That data is replaced either by a new frame of demo data or an incoming serial packet and the process is repeated, running at about 40 fps.
+The application draws 16 vertical bands of the spectrum analyzer which can be up to 16 high. The program first clears the screen, draws the border and text, fills in color, and the main draw loop calls DrawBand for each one in turn. Each frame draws a new set of peaks from the PeakData table, which has 16 entries, one per band. That data is replaced either by a new frame of demo data or an incoming serial packet and the process is repeated. At 2400 baud, the serial link carries about 21 packets per second.
 
 Color RAM can be filled with different patterns by stepping through the visual styles with the C key, but it is not drawn each and every frame.
 
 Basic bar draw is to walk down the bar and draw a blank (when above the bar), the top of the bar, then the middle pieces, then the bottom. A visual style definition is set that includes all of the PETSCII chars you need to draw a band, like the corners and sides, etc. It can be changed with the S key.
 
-Every frame the serial port is checked for incoming data which is then stored in the SerialBuf. If that fills up without a nul it is reset, but if a nul comess in at the right place (right packet size) and the magic byte matches, it is used as new peakdata and stored in the PeakData table. The code on the ESP32 sends it over as 16 nibbles packed into 8 bytes plus a VU value.
+Every frame the serial port is checked for incoming data which is then stored in the SerialBuf. Packets have a fixed size. If a packet starts with the magic byte and ends with a nul, it is used as new peakdata and stored in the PeakData table. If not, bytes are skipped until the next nul, after which a new packet is expected. The code on the ESP32 sends it over as 16 nibbles packed into 8 bytes plus a VU value.
 
 Concerning handling of serial input:
 
