@@ -261,7 +261,7 @@ drawLoop:
                 dex
                 bpl :-
 
-.if SERIAL && (C64 || (PET && SENDSTAR))
+.if SERIAL && SENDSTAR
                 lda #'*'              ; Send a * back to the host
                 jsr PutSerialChar
 .endif
