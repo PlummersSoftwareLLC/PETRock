@@ -216,14 +216,9 @@ drawLoop:
 
 .if SERIAL
                 jsr GetSerialChar
-                cmp #$ff              ; If byte is $ff, check if "no data" was flagged
-                bne @havebyte
-                cpx #<SER_ERR_NO_DATA
-                bne @havebyte
-                cpy #>SER_ERR_NO_DATA
-                beq @donedata
+                bcs @donedata         ; Carry set means there was no data
 
-@havebyte:      jsr GotSerial
+                jsr GotSerial
                 jmp drawLoop
 .endif
 

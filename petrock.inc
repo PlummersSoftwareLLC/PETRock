@@ -105,12 +105,6 @@
     .include        "cbm_kernal.inc"
 
 .if SERIAL
-  .if C64           ; Currently only pull in serial kernal includes for C64
-    .include        "ser-kernel.inc"
-  .endif
-                    ; Error code includes also used by PET driver
-    .include        "ser-error.inc"
-
     ; Serial data packet
 
     MAGIC_LEN           = 1       ; Number of magic bytes if any

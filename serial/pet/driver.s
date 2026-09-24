@@ -130,7 +130,7 @@ OpenSerial:
 
 ;-----------------------------------------------------------------------------------
 ; GetSerialChar: Will fetch a character from the receive buffer and store it into A.
-; If no data is available, SER_ERR_NO_DATA is returned in X/Y.
+; Carry is clear if a character was fetched, and set if no data is available.
 ;-----------------------------------------------------------------------------------
 
 GetSerialChar:
@@ -139,12 +139,10 @@ GetSerialChar:
                 beq @nodata           ; No character available
                 lda RX_BUF,X          ; New character
                 inc RxBufReadPtr      ; Acknowledge byte by incrementing
+                clc
                 rts
 
-@nodata:
-                lda #$ff
-                ldx #<SER_ERR_NO_DATA
-                ldy #>SER_ERR_NO_DATA
+@nodata:        sec
                 rts
 
 .if SENDSTAR    ; Transmission is only supported if we send stars

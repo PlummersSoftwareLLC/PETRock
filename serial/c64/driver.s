@@ -68,8 +68,6 @@ OLDCHK          = $f21b
 FINDFN          = $f30f
 SETDEV          = $f31f
 NOFILE          = $f701
-RDBYTE          = $f14e
-EXITRD          = $f1b4
 
 ;-----------------------------------------------------------------------------------
 ; Read-only words used by code/kernal API routines
@@ -129,40 +127,23 @@ OpenSerial:
 
 ;-----------------------------------------------------------------------------------
 ; GetSerialChar: Will fetch a character from the receive buffer and store it into A.
-; If no data is available, SER_ERR_NO_DATA is returned in X/Y.
+; Carry is clear if a character was fetched, and set if no data is available.
+;
+; We read the buffer directly, instead of through CHKIN, GETIN and CLRCH. That's a
+; lot quicker, and the NMI handler keeps reception enabled after every byte anyway.
 ;-----------------------------------------------------------------------------------
 
-GetSerialChar:   
-        ldx #RS232_DEV
-        jsr CHKIN
-        jsr ser_rshavedata
-        beq @nodata
-        jsr GetBufferChar
-        pha
-        jsr CLRCH 
-        pla
-        ldx #<SER_ERR_OK
-        ldy #>SER_ERR_OK 
+GetSerialChar:
+        ldy RIDBS
+        cpy RIDBE       ; buffer empty?
+        beq @nodata     ; yes
+        lda (RIBUF),y   ; no, fetch character
+        inc RIDBS
+        clc
         rts
 
 @nodata:
-        jsr CLRCH 
-        lda #$ff
-        ldx #<SER_ERR_NO_DATA
-        ldy #>SER_ERR_NO_DATA 
-        rts
-
-;-----------------------------------------------------------------------------------
-; GetBufferChar: This is a minimised call to get the character from the buffer.
-; The Kernal code does not allow zero bytes (0x00)... this does.
-;-----------------------------------------------------------------------------------
- 
-GetBufferChar:
-        jsr RDBYTE
-        bcc @exit
-        jmp EXITRD
-@exit:
-        clc
+        sec
         rts
 
 ;-----------------------------------------------------------------------------------
@@ -472,15 +453,3 @@ ser_ret2:
         lda PTR1
 ;last:
         rts             ; cs = buffer was empty
-
-;----------------------------------------
-; A = 0 when no data
-; A = 1 when data
-ser_rshavedata:
-        lda #0
-        ldy RIDBS
-        cpy RIDBE       ; buffer empty?
-        beq @rsempty    ; no
-        lda #1
-@rsempty:
-        rts 
