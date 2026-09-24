@@ -92,6 +92,9 @@ OpenSerial:
                 lda #$40              ; Shift register disabled, no latching, T1 free-run, T2 one-shot
                 sta VIA_CR
 
+                lda VIA_PCR           ; Save PCR, which also selects the character set,
+                sta PcrBasic          ;   so we can restore it when we're done
+
                 lda #$EC              ; Tx as output high, uppercase+graphics ($EE for lower)
                                       ; CA1 trigger on falling edge
                 sta VIA_PCR
@@ -124,6 +127,11 @@ OpenSerial:
 .endif
                 sta KbdPollIntrvl     ; on current baud/timer rate
                 sta KbdPollCnt
+
+.if SENDSTAR
+                lda #ST_READY         ; Start out idle, instead of sending the start bit
+                sta TxState           ;   of whatever TxCurByte holds
+.endif
 
                 cli
                 rts
@@ -200,7 +208,7 @@ CloseSerial:
                 sta VIA_PA2
                 sta VIA_T1LH
 
-                lda #$0C
+                lda PcrBasic          ; Restore PCR as it was, including the character set
                 sta VIA_PCR
 
                 ; Kernal Initialization Values in Sequence
@@ -234,9 +242,10 @@ CloseSerial:
                 lda #$0F
                 sta VIA_SR
 
-                ldx #$07
-                lda $E74D,X
-                sta VIA_T2CL
+                ; We leave VIA timer 2 as is. The ROM routines that use it, like
+                ; the bell in the BASIC 4 editor ROMs, load it before use. The
+                ; bell's table of timer 2 values also sits at a different address
+                ; in the 40 and 80 column editor ROMs.
 
                 cli                   ; Enable interrupts
                 rts
@@ -625,9 +634,12 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
                 bne @exit             ; Always
 
 @ca1:           lda VIA_PA1           ; Acknowledge interrupt
-                ; We hit a start bit, set up TIM2
-                ; We want the first event to be in 1@5 periods
-                ; And enable tim2 interrupt
+                ; We hit a start bit, so set up TIM2 to fire one bit time from
+                ; now, and enable its interrupt. With the interrupt latency before
+                ; and after that, each data bit is sampled about a third of the way
+                ; into the bit, rather than in the middle. That works in our favour:
+                ; other interrupts can only delay samples, so sampling early leaves
+                ; room for that.
                 ldx #BAUD
                 lda BaudTblLo,X
                 sta VIA_T2CL
