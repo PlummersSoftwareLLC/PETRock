@@ -19,6 +19,17 @@
 
 BAUD            = 4                   ; Baud rate, index into BaudTblLo/Hi (4 = 2400)
 
+.if .not SENDSTAR
+; If we don't transmit, Timer 1 only drives keyboard polling. It then doesn't have to
+; run at the baud rate, but only fast enough to scan the keyboard at ~60 Hz.
+  .if BAUD < 3
+KBD_POLL_TICKS  = 1                   ; Full keyboard poll on every tick
+  .else
+KBD_POLL_TICKS  = 12                  ; Setup, 10 row polls and conversion, one per tick
+  .endif
+KBD_T1_LATCH    = 1000000 / (60 * KBD_POLL_TICKS) - 2  ; 1 MHz clock, T1 period is latch + 2
+.endif
+
 ;-----------------------------------------------------------------------------------
 ; Constants
 ;-----------------------------------------------------------------------------------
@@ -95,6 +106,7 @@ OpenSerial:
                 sta VIA_T1CH          ; Need to clear high before writing latch
                                       ; Otherwise it seems to fail half the time?
 
+.if SENDSTAR    ; Timer 1 clocks transmission, so it runs at the baud rate
                 ldx #BAUD             ; Set up timers based on BAUD
                 lda BaudTblLo,X       ; Set interrupt timer
                 sta VIA_T1LL
@@ -102,6 +114,14 @@ OpenSerial:
                 sta VIA_T1LH
 
                 lda KbdPollIntTbl,X   ; Set keyboard polling interval based
+.else           ; Timer 1 only drives keyboard polling
+                lda #<KBD_T1_LATCH
+                sta VIA_T1LL
+                lda #>KBD_T1_LATCH
+                sta VIA_T1LH
+
+                lda #KBD_POLL_TICKS
+.endif
                 sta KbdPollIntrvl     ; on current baud/timer rate
                 sta KbdPollCnt
 
@@ -127,6 +147,8 @@ GetSerialChar:
                 ldy #>SER_ERR_NO_DATA
                 rts
 
+.if SENDSTAR    ; Transmission is only supported if we send stars
+
 ;-----------------------------------------------------------------------------------
 ; PutSerialChar: Output character in A. This blocks if we're still sending another
 ; char.
@@ -140,6 +162,7 @@ PutSerialChar:
                 sta TxNewFlag
                 rts
 
+.endif          ; SENDSTAR
 
 ;-----------------------------------------------------------------------------------
 ; StartSerial: Start serial communication. OpenSerial must have been called already.
@@ -234,6 +257,8 @@ GetKeyboardChar:
                 stx KbdNewFlag        ; Acknowledge key press
                 rts
 
+.if SENDSTAR    ; Transmission is only supported if we send stars
+
 ;-----------------------------------------------------------------------
 ; Process a Tx sample event
 ;-----------------------------------------------------------------------
@@ -316,6 +341,8 @@ SetTxPin:
                 and #$DF              ; Make bit 5 low
                 sta VIA_PCR
                 rts
+
+.endif          ; SENDSTAR
 
 .if BAUD < 3    ; Use "slow" (full-keyboard) polling when < 1200 Bd
 
@@ -542,9 +569,17 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
                 sta VIA_T2CH          ;4; <--From start of IRQ to here is 93 ($5D) cycles!, need to subtract from BAUDTBL
                 jmp @exit             ;   to give us TIM2BAUD
 
-@tim1:          lda VIA_T1CL
-                ; Transmit next bit if sending
-                jsr SendBit
+@tim1:          lda VIA_T1CL          ; Acknowledge
+
+.if SENDSTAR    ; Transmit next bit if sending
+                lda TxState           ; If we're ready and have nothing to send, the Tx
+                cmp #ST_READY         ;   pin is already high and SendBit has nothing
+                bne @sendbit          ;   to do, so we skip it
+                bit TxNewFlag
+                bpl @txdone
+@sendbit:       jsr SendBit
+@txdone:
+.endif
 
 .if BAUD < 3    ; Less than 1200 Bd => poll full keyboard
                 ;"Slow" keyboard polling (all rows at once)
@@ -580,7 +615,9 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
 
 .endif          ; Baud-based keyboard polling routine
 
-@keyend:        cmp KbdByte           ; Check if same byte as before
+@keyend:        inc Jiffies           ; A keyboard scan completes at ~60 Hz
+
+                cmp KbdByte           ; Check if same byte as before
                 sta KbdByte
                 beq @exit             ; Don't signal the key for a repeat
                 lda KbdByte
@@ -624,11 +661,13 @@ IrqHandler:     ; 36 cycles till we hit here from IRQ firing
 BaudTblLo:      .byte $83, $05, $83, $41, $A1, $D0, $68
 BaudTblHi:      .byte $23, $0D, $06, $03, $01, $00, $00
 
+.if SENDSTAR    ; Only used if Timer 1 runs at the baud rate
                 ; Poll interval mask for ~60Hz keyboard polling based on the baud timer
                 ;      110  300  600 1200 2400 4800 9600 (Baud)
 KbdPollIntTbl:     .byte 2,   5,  10,  20,  40,  80, 160
       ; Poll freq Hz    55   60   60   60   60   60   60
                 ; If KbdPollIntrvl value is below 12 we need to use the all at once keyboard scan
+.endif
 
                 ; Timer 2 isn't freerunning so we have to subtract the cycles till we reset
                 ; it from the rate (- $5D)

@@ -233,3 +233,13 @@ MAX_VU              = (((XSIZE-LEFT_MARGIN-RIGHT_MARGIN)/2)-1)
     TK_PEEK         = $c2 ; PEEK
 
 .assert (TOP_MARGIN + BOTTOM_MARGIN + BAND_HEIGHT <= YSIZE), error
+
+; Jiffy clock used for the text timeout on the PET -----------------------
+
+.if PET
+  .if SERIAL
+JIFFY_CLOCK     = Jiffies   ; Counted by the serial driver, as it replaces the KERNAL IRQ
+  .else
+JIFFY_CLOCK     = TIME+2    ; Least significant byte of the KERNAL jiffy clock
+  .endif
+.endif

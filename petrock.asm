@@ -81,8 +81,8 @@ ScratchStart:
     TextColor:       .res  1              ; Text color at startup
 .endif
     TextTimeout:     .res  1              ; Text timeout second count (0 = disabled)
-.if PET         ; Rudimentary approach for PET. The C64 uses a CIA timer
-    TextCountDown:   .res  2              ; Text timeout countdown timer
+.if PET         ; The PET counts jiffies. The C64 uses a CIA timer
+    TextTimerStart:  .res  1              ; Jiffy count at start of current second
 .endif
 .if .not (PET && SERIAL)
     DemoToggle:      .res  1              ; Update toggle to delay demo mode updates
@@ -257,10 +257,6 @@ drawLoop:
                 jsr DrawBand
                 dex
                 bpl :-
-
-.if PET
-                jsr DownTextTimer     ; On the PET, decrease the text timer to compensate
-.endif                                ;   for drawing time
 
 .if SERIAL && (C64 || (PET && SENDSTAR))
                 lda #'*'              ; Send a * back to the host
@@ -1561,45 +1557,11 @@ StartTextTimer:
                 sta CIA1_TOD10          ; This write starts the clock
 .endif
 
-.if PET         ; We use a more rudimentary countdown timer on the PET
-                lda #$00
-                sta TextCountDown
-  .if SERIAL    ;
-                lda #$20                ; Serial handling takes time, so we count
-  .else                                 ;   down from a lower value than when
-                lda #$40                ;   serial is disabled
-  .endif
-                sta TextCountDown+1
+.if PET         ; On the PET we count jiffies
+                lda JIFFY_CLOCK
+                sta TextTimerStart
 .endif
                 rts
-
-.if PET
-
-;-----------------------------------------------------------------------------------
-; DownTextTimer - Cut the PET text timer down by a chunk
-;-----------------------------------------------------------------------------------
-
-DownTextTimer:
-                lda TextTimeout
-                beq @done
-
-                dec TextCountDown+1     ; We take off 384 just because that seems
-                beq @atzero             ;   to work out about right for one screen
-                lda TextCountDown       ;   redraw.
-                sec
-                sbc #$80
-                sta TextCountDown
-                bcs @done
-                dec TextCountDown+1
-                bne @done
-
-@atzero:        lda #1                  ; Due to how CheckTextTimer assesses if time
-                sta TextCountDown       ;   has run out, set lo and hi bytes to 1 to
-                sta TextCountDown+1     ;   finish counting down this sorta second.
-
-@done:          rts
-
-.endif
 
 ;-----------------------------------------------------------------------------------
 ; CheckTextTimer - Clear text if TOD timer is at "TextTimeout" seconds
@@ -1618,15 +1580,20 @@ CheckTextTimer:
                 jmp ClearTextBlock
 .endif
 
-.if PET         ; Decrease countdown timer until we reach $0000
-                dec TextCountDown
-                bne @done
-                dec TextCountDown+1
-                bne @done
+.if PET         ; Check if a second's worth of jiffies has passed
+                lda JIFFY_CLOCK
+                sec
+                sbc TextTimerStart
+                cmp #SECOND_JIFFIES
+                bcc @done
+
+                lda TextTimerStart    ; Start counting the next second
+                clc
+                adc #SECOND_JIFFIES
+                sta TextTimerStart
 
                 dec TextTimeout       ; Decrease timeout second count
                 beq ClearTextBlock    ; If we've reached 0, clear the text block
-                jmp StartTextTimer    ; Otherwise, count down another rough second
 .endif
 
 @done:          rts
