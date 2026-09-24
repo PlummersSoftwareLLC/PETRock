@@ -16,6 +16,12 @@
 ;-----------------------------------------------------------------------------------
 
 ;-----------------------------------------------------------------------------------
+; Serial driver config
+;-----------------------------------------------------------------------------------
+
+SER_BAUD        = BAUD2400      ; BAUD4800, BAUD2400, BAUD1200 or BAUD300
+
+;-----------------------------------------------------------------------------------
 ; Constants
 ;-----------------------------------------------------------------------------------
 
@@ -41,7 +47,6 @@ ROBUF           = $f9
 ; I/O space addresses
 ;-----------------------------------------------------------------------------------
 
-BAUDOF          = $0299
 RIDBE           = $029b
 RIDBS           = $029c
 RODBS           = $029d
@@ -69,20 +74,30 @@ SETDEV          = $f31f
 NOFILE          = $f701
 
 ;-----------------------------------------------------------------------------------
-; Read-only words used by code/kernal API routines
+; Bit timing, in CPU cycles, by baud rate and machine clock
+;
+; strtbit is the timer B delay from the start bit NMI to the first data bit sample,
+; and fullbit the timer latch for one bit (the bit time minus one).
+;
+; The NTSC values for 2400 baud and lower are from the Transactor article. The others
+; are calculated for the clock of the machine, PAL (985248 Hz) or NTSC (1022727 Hz):
+; - fullbit is the bit time minus one, so samples don't drift across a byte.
+; - strtbit makes each sample fall about 45 cycles before the middle of its bit.
+;   It's about 1.5 bit times minus 154 cycles of NMI latency (before the timer
+;   starts, and from underflow to reading the pin) minus those 45 cycles. Sampling
+;   early leaves room for the ways samples get delayed, like VIC bad lines (up to
+;   ~40 cycles each, for the start bit NMI and for the sample itself).
 ;-----------------------------------------------------------------------------------
 
-strtbit:
-strt48:         .word 225       ; 225     Made up by Dave after reading Wikipedia
-strt24:         .word $01cb     ; 459     From the Transactor article
-strt12:         .word $0442     ; 1090    
-strt03:         .word $1333     ; 4915    
+strtbit:        ;  4800  2400  1200   300 baud
+                .word   121,  459, 1090, 4915   ; NTSC
+                .word   109,  418, 1033, 4727   ; PAL
 
-fullbit:
-full48:         .word 208       ; 208     Made up by Dave after reading Wikipedia
-full24:         .word $01a5     ; 421     From the Transactor article
-full12:         .word $034d     ; 845     not referenced directly, but through Y
-full03:         .word $0d52     ; 3410    register indexing
+fullbit:        ;  4800  2400  1200   300 baud
+                .word   212,  421,  845, 3410   ; NTSC
+                .word   204,  410,  820, 3283   ; PAL
+
+PAL_TIMING      = 8             ; Offset of the PAL values in the tables
 
 ; Control Registers
 ; 
@@ -199,16 +214,18 @@ GetKeyboardChar = GETIN
 ;-----------------------------------------------------------------------------------
 
 ser_setup:
-        ; set things up for our baud rate
-        
-;        lda strt48
-;        sta ser_strtlo
-;        lda strt48+1
-;        sta ser_strthi
-;        lda full48
-;        sta ser_fulllo
-;        lda full48+1
-;        sta ser_fullhi
+        ldy #SER_BAUD   ; set up bit timing for our baud rate
+        lda PALFLAG     ;   and the machine's clock
+        beq :+
+        ldy #SER_BAUD + PAL_TIMING
+:       lda strtbit,y   ; values used by the nmi handler
+        sta ser_strtlo
+        lda strtbit+1,y
+        sta ser_strthi
+        lda fullbit,y
+        sta ser_fulllo
+        lda fullbit+1,y
+        sta ser_fullhi
 
         lda NMISR       ; save the vectors we're about to change
         sta ser_oldnmi
@@ -433,30 +450,8 @@ ser_nchkin:
 ser_enable:
         sta PTR1         ; enable rs232 input
         sty XSAV
-;baud:
-        ; BAUD          BAUDOF+1   (BAUDOF+1) & #6
-        ; 2400 == $960     9          9 & 6
-        ; 1200 == $4B0     4          4 & 6
-        ; 300  == $12C     1          1 & 6 
-        
-        ; BUGBUG if easy and possible let this work as it used to, even though
-        ; I have NFI what it's supposed to be doing.  Let bigger heads prevail.
-        ;
-        ; lda BAUDOF+1    ; set receive to same
-        ; and #$06        ;   baud rate as xmit
-        ; tay     
-        ; lda strt24,y
-        
-        ldy #BAUD2400   ; We could allow selection by Y reg here if desired
-        lda strtbit,y    ;   
-        sta ser_strtlo  ; overwrite values used by nmi handler
-        lda strtbit+1,y
-        sta ser_strthi
-        lda fullbit,y
-        sta ser_fulllo
-        lda fullbit+1,y
-        sta ser_fullhi
-        
+        ; The original code derived the bit timing from the KERNAL's transmit
+        ; bit time in BAUDOF here. We set it up once, in ser_setup.
         lda ENABL
         and #$12        ; *flag or tb on?
         bne ser_ret1    ; yes
