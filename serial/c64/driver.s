@@ -29,7 +29,6 @@ XSAV            = $97
 DFLTN           = $99
 DFLTO           = $9a
 PTR1            = $9e
-PTR2            = $9f
 BITCI           = $a8
 RIDATA          = $aa
 BITTS           = $b4
@@ -166,10 +165,30 @@ PutSerialChar:
 StartSerial     = ser_enable
 
 ;-----------------------------------------------------------------------------------
-; CloseSerial: Teardown serial comms. We just disable it.
+; CloseSerial: Teardown serial comms. We wait for transmission to finish and turn
+; off the serial NMIs. Then we restore the KERNAL vectors that ser_setup changed, as
+; they point into our code. Finally, we close the RS-232 file, which also returns the
+; buffer memory that OPEN took from the top of memory.
 ;-----------------------------------------------------------------------------------
 
-CloseSerial     = ser_disable
+CloseSerial:
+        jsr ser_disable
+
+        lda ser_oldnmi
+        sta NMISR
+        lda ser_oldnmi+1
+        sta NMISR+1
+        lda ser_oldchkin
+        sta CKISR
+        lda ser_oldchkin+1
+        sta CKISR+1
+        lda ser_oldbsout
+        sta BSOSR
+        lda ser_oldbsout+1
+        sta BSOSR+1
+
+        lda #RS232_DEV
+        jmp CLOSE
 
 ;-----------------------------------------------------------------------------------
 ; GetKeyboardChar: Get a character from the keyboard. In this case, just use GETIN
@@ -190,6 +209,19 @@ ser_setup:
 ;        sta ser_fulllo
 ;        lda full48+1
 ;        sta ser_fullhi
+
+        lda NMISR       ; save the vectors we're about to change
+        sta ser_oldnmi
+        lda NMISR+1
+        sta ser_oldnmi+1
+        lda CKISR
+        sta ser_oldchkin
+        lda CKISR+1
+        sta ser_oldchkin+1
+        lda BSOSR
+        sta ser_oldbsout
+        lda BSOSR+1
+        sta ser_oldbsout+1
 
         lda #<ser_nmi64
         ldy #>ser_nmi64
@@ -436,20 +468,8 @@ ser_nosuch:
 ser_back:
         lda DEVNUM
         jmp OLDCHK
-;--------------------------------------
-; rsget:
-        sta PTR1        ; input from modem
-        sty PTR2
-        ldy RIDBS
-        cpy RIDBE       ; buffer empty?
-        beq ser_ret2    ; yes
-        lda (RIBUF),y   ; no, fetch character
-        sta PTR1
-        inc RIDBS
 ser_ret1:
-        clc             ; cc = char in acc.
-ser_ret2:
-        ldy PTR2
+        clc
+        ldy XSAV        ; restore registers saved by ser_enable
         lda PTR1
-;last:
-        rts             ; cs = buffer was empty
+        rts
