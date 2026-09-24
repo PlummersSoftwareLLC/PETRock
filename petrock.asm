@@ -19,10 +19,11 @@
 ; Color RAM can be filled with different patterns by stepping through the visual styles
 ; with the C key, but it is not drawn each and every frame.
 ;
-; Basic bar draw is to walk down the bar and draw a blank (when above the bar), the top
-; of the bar, then the middle pieces, then the bottom.  A visual style definition is
-; set that includes all of the PETSCII chars you need to draw a band, like the corners
-; and sides, etc.  It can be changed with the S key.
+; A bar is drawn as blanks above the bar, the top of the bar, then the middle pieces,
+; then the bottom.  To save time, only the rows that changed since the band was last
+; drawn are redrawn.  A visual style definition is set that includes all of the
+; PETSCII chars you need to draw a band, like the corners and sides, etc.  It can be
+; changed with the S key.
 ;
 ; Every frame the serial port is checked for incoming data which is then stored in the
 ; SerialBuf.  Packets have a fixed size.  If a packet starts with the magic byte and
@@ -70,6 +71,12 @@ ScratchStart:
     resultHi:        .res  1
     VU:              .res  1              ; VU Audio Data
     Peaks:           .res  NUM_BANDS      ; Peak Data for current frame
+    PrevPeaks:       .res  NUM_BANDS      ; Band heights on screen ($FF = must redraw)
+    BandIndex:       .res  1              ; Band number being drawn by DrawBand
+    BandCol:         .res  1              ; Screen column offset of that band
+    OldHeight:       .res  1              ; Height of that band before drawing
+    NewTop:          .res  1              ; Screen row of that band's new top
+    RunVector:       .res  2              ; Entry point into BlankRun or MidRun
     NextStyle:       .res  1              ; The next style we will pick
     CharDefs:        .res  VISUALDEF_SIZE ; Storage for the visualDef currently in use
     RedrawFlag:      .res  1              ; Flag to redraw screen
@@ -101,6 +108,7 @@ ScratchStart:
 ScratchEnd:
 
 .assert * <= SCRATCH_END, error           ; Make sure we haven't run off the end of the buffer
+.assert <RunVector <> $FF, error          ; JMP (RunVector) fails if it straddles a page
 
 .if SERIAL
 .assert SerialBufLen = PACKET_LENGTH, error
@@ -884,38 +892,17 @@ InitVU:         ldy #VUColorTableLen-1
 
                 ; Draw the VU meter on right, then draw its mirror on the left
 
-DrawVU:         lda #<VUPOS1
-                sta zptmp
-                lda #>VUPOS1
-                sta zptmp+1
-                lda #<VUPOS2
-                sta zptmpB
-                lda #>VUPOS2
-                sta zptmpB+1
-
-                ldy #0
-                ldx #MAX_VU-1
+DrawVU:         ldy #0                ; Y walks the right half from left to right,
+                ldx #MAX_VU-1         ;   X walks its mirror from right to left
 vuloop:         lda #VUSYMBOL
                 cpy VU                ; If we're at or below the VU value we use the
                 bcc :+                ;   VUSYMBOL to draw the current char else we use
                 lda #MEDIUMSHADE      ;   the partial shade symbol
-:               sta (zptmp),y         ; Store the char in screen memory
-                sta tempOutput
-
-                tya
-                pha                   ; Save Y
-                txa
-                tay                   ; Move X into Y
-
-                lda tempOutput
-                sta (zptmpB), y
-
-                pla
-                tay
+:               sta VUPOS1, y         ; Store the char in screen memory
+                sta VUPOS2, x
                 iny
                 dex
-                cpy #MAX_VU
-                bcc vuloop
+                bpl vuloop
 
                 rts
 
@@ -1293,150 +1280,286 @@ FcColorMem:     lda #YSIZE-TOP_MARGIN-BOTTOM_MARGIN   ; Count of rows to paint c
 ;               X       Band Number     [PRESERVED]
 ;               A       Height of bar
 ;-----------------------------------------------------------------------------------
-; Static version that makes assumptions:
-;               No dynamic color memory
-;               Band Width of 2
+; A band's screen rows hold blanks above the bar, the top symbols on the bar's top
+; row and middle symbols below that. Its bottom row holds blanks, "single-height"
+; symbols or the bottom symbols, for a height of 0, 1 or more, respectively.
 ;
-; Walks down the screen and depending on whether the current pos is above, equal, or
-; below the bar itself, draws blanks, the bar top, the bar middle, bar bottom or
-; "single-height" characters
+; To save time, we only redraw what changed since the band was last drawn. The
+; height it was drawn with is kept in PrevPeaks:
+; - If the band grew, we draw the top symbols on the new top row, and fill the rows
+;   below it with middle symbols, down to the row above the bottom row.
+; - If the band shrank, we fill the rows above the new top row with blanks, up to
+;   BAND_TOP_ROW, and draw the top symbols on the new top row.
+; - We only redraw the bottom row if what it holds changes.
+; A PrevPeaks value of $FF forces a complete redraw of the band.
+;
+; The runs of blanks and middles are drawn by jumping into unrolled sequences of
+; stores (BlankRun and MidRun) that always continue to their last row. This can
+; rewrite rows with the symbols they already hold, which is quicker than stopping
+; the run early.
 ;-----------------------------------------------------------------------------------
 
-DrawBand:       sta Height            ; Height is height of bar itself
-                txa
+                BAND_SCREEN_LOC = SCREEN_MEM + LEFT_MARGIN
+                BAND_BOTTOM_LOC = BAND_SCREEN_LOC + BAND_BOTTOM_ROW * XSIZE
+
+DrawBand:       cmp #MAX_PEAK+1       ; Limit height to what fits on the screen
+                bcc :+
+                lda #MAX_PEAK
+:               cmp PrevPeaks, x      ; If the band is on screen with this height
+                bne :+                ;   already, we're done
+                rts
+
+:               sta Height            ; Save new height, and swap it in for the
+                lda PrevPeaks, x      ;   old one in PrevPeaks
+                sta OldHeight
+                lda Height
+                sta PrevPeaks, x
+
+                stx BandIndex         ; Save band number and calculate the band's
+                txa                   ;   column offset on screen
                 asl
                 .if COL80
                 asl
                 .endif
-                sta SquareX           ; Bar xPos on screen
+                sta BandCol
 
-                ; Square Y will be the screen line number of the top of the bar
+                lda Height            ; Determine screen row of new top of band
+                jsr BandTopRow
+                sta NewTop
 
-                lda #YSIZE - BOTTOM_MARGIN
+                lda OldHeight         ; If the old height isn't valid, we draw the
+                cmp #$FF              ;   complete band
+                beq @full
+
+                jsr BandTopRow        ; Compare old top row with new top row
+                cmp NewTop
+                beq @bottom           ; Same row, so only the bottom row can change
+                bcc @shrunk           ; Old top is above new top, so the band shrank
+
+                jsr DrawTopRow        ; Band grew
+                jsr DrawMidRun
+                jmp @bottom
+
+@shrunk:        jsr DrawBlankRun
+                jsr DrawTopRow
+
+@bottom:        lda OldHeight         ; The bottom row stays the same if both the old
+                cmp #2                ;   and new height are 2 or more
+                bcc :+
+                lda Height
+                cmp #2
+                bcs @done
+
+:               lda OldHeight         ; Otherwise, only redraw it if its type changed
+                jsr BottomRowType
+                sta OldHeight
+                lda Height
+                jsr BottomRowType
+                cmp OldHeight
+                bne @drawbottom
+@done:          ldx BandIndex
+                rts
+
+@full:          jsr DrawBlankRun
+                jsr DrawTopRow
+                jsr DrawMidRun
+                lda Height
+                jsr BottomRowType
+
+@drawbottom:    ldx BandCol
+                cmp #1
+                beq @oneline
+                bcs @barbottom
+
+                lda #' '              ; Height 0: blanks
+                sta BAND_BOTTOM_LOC, x
+                sta BAND_BOTTOM_LOC+1, x
+                .if COL80
+                sta BAND_BOTTOM_LOC+2, x
+                sta BAND_BOTTOM_LOC+3, x
+                .endif
+                ldx BandIndex
+                rts
+
+@oneline:       lda CharDefs + visualDef::ONELINE1SYMBOL    ; Height 1: single-height symbols
+                sta BAND_BOTTOM_LOC, x
+                .if COL80
+                sta BAND_BOTTOM_LOC+1, x
+                sta BAND_BOTTOM_LOC+2, x
+                .endif
+                lda CharDefs + visualDef::ONELINE2SYMBOL
+                sta BAND_BOTTOM_LOC+BAND_WIDTH-1, x
+                ldx BandIndex
+                rts
+
+@barbottom:     lda CharDefs + visualDef::BOTTOMLEFTSYMBOL  ; Height 2+: bottom symbols
+                sta BAND_BOTTOM_LOC, x
+                .if COL80
+                lda CharDefs + visualDef::BOTTOMMIDDLESYMBOL               ; Draw center pieces on 80 column screens only
+                sta BAND_BOTTOM_LOC+1, x
+                sta BAND_BOTTOM_LOC+2, x
+                .endif
+                lda CharDefs + visualDef::BOTTOMRIGHTSYMBOL
+                sta BAND_BOTTOM_LOC+BAND_WIDTH-1, x
+                ldx BandIndex
+                rts
+
+;-----------------------------------------------------------------------------------
+; BandTopRow    Returns in A the screen row of the top of a band with height A. For
+;               heights 0 and 1 that's BAND_BOTTOM_ROW, as all rows above the bottom
+;               row are then blank.
+;-----------------------------------------------------------------------------------
+
+BandTopRow:     cmp #1
+                bcs :+
+                lda #1
+:               eor #$FF              ; A = BAND_BOTTOM_ROW + 1 - A
                 sec
-                sbc Height
-                sta SquareY
+                adc #BAND_BOTTOM_ROW + 1
+                rts
 
-                ; tempY is the current screen line
+;-----------------------------------------------------------------------------------
+; BottomRowType Returns in A what the bottom row of a band with height A holds:
+;               0 = blanks, 1 = single-height symbols, 2 = bottom symbols
+;-----------------------------------------------------------------------------------
 
-                lda #TOP_MARGIN
-                sta tempY             ; We start on the first screen line of the analyzer
+BottomRowType:  cmp #2
+                bcc :+
+                lda #2
+:               rts
 
-                SCREEN_LOC = (SCREEN_MEM + XSIZE * TOP_MARGIN + LEFT_MARGIN)
+;-----------------------------------------------------------------------------------
+; DrawTopRow    Draws the top symbols of the band at BandCol on row NewTop, unless
+;               that's the bottom row
+;-----------------------------------------------------------------------------------
 
-                lda #<SCREEN_LOC      ; zptmp points to top left of first bar
-                sta zptmp             ;  in screen memory
-                lda #>SCREEN_LOC
+DrawTopRow:     ldy NewTop
+                cpy #BAND_BOTTOM_ROW
+                bcs @done
+
+                lda BandRowLo - BAND_TOP_ROW, y     ; Point zptmp to row NewTop
+                sta zptmp
+                lda BandRowHi - BAND_TOP_ROW, y
                 sta zptmp+1
 
-lineSwitch:     ldy SquareX           ; Y will be the X-pos (zp addr mode not supported on X register)
-                lda tempY             ; Current screen line
-                cmp #YSIZE - BOTTOM_MARGIN - 1
-                bne @notlastline
-                lda Height            ; If 0 height, write blanks instead of band base
-                bne :+
-                jmp drawLastBlanks
-:               cmp #1
-                beq drawOneLine
-                bne drawLastLine
-@notlastline:   cmp SquareY           ; Compare to screen line of top of bar
-                bcc drawBlanks
-                beq drawFirstLine
-                bcs drawMiddleLine
-drawBlanks:
-                lda #' '
-                sta (zptmp),y
-                iny
-                .if COL80
-                sta (zptmp),y
-                iny
-                sta (zptmp),y
-                iny
-                .endif
-                sta (zptmp),y
-                inc tempY
-                bne lineLoop
-drawFirstLine:
+                ldy BandCol
                 lda CharDefs + visualDef::TOPLEFTSYMBOL
-                sta (zptmp),y
+                sta (zptmp), y
                 iny
                 .if COL80
                 lda CharDefs + visualDef::TOPMIDDLESYMBOL               ; Draw center pieces on 80 column screens only
-                sta (zptmp),y
+                sta (zptmp), y
                 iny
-                sta (zptmp),y
+                sta (zptmp), y
                 iny
                 .endif
                 lda CharDefs + visualDef::TOPRIGHTSYMBOL
-                sta (zptmp),y
-                inc tempY
-                bne lineLoop
-drawMiddleLine:
-                lda CharDefs + visualDef::VLINE1SYMBOL
-                sta (zptmp),y
-                iny
-                .if COL80
-                lda CharDefs + visualDef::HLINE1MIDDLESYMBOL               ; Draw center pieces on 80 column screens only
-                sta (zptmp),y
-                iny
-                sta (zptmp),y
-                iny
-                .endif
-                lda CharDefs + visualDef::VLINE2SYMBOL
-                sta (zptmp),y
-                inc tempY
-                cpy #YSIZE-BOTTOM_MARGIN-1
-                bne lineLoop
-drawLastLine:
-                ldy SquareX
-                lda CharDefs + visualDef::BOTTOMLEFTSYMBOL
-                sta (zptmp),y
-                iny
-                .if COL80
-                lda CharDefs + visualDef::BOTTOMMIDDLESYMBOL               ; Draw center pieces on 80 column screens only
-                sta (zptmp),y
-                iny
-                sta (zptmp),y
-                iny
-                .endif
-                lda CharDefs + visualDef::BOTTOMRIGHTSYMBOL
-                sta (zptmp),y
-                rts
-drawOneLine:
-                ldy SquareX
-                lda CharDefs + visualDef::ONELINE1SYMBOL
-                sta (zptmp),y
-                iny
-                .if COL80
-                sta (zptmp),y
-                iny
-                sta (zptmp),y
-                iny
-                .endif
-                lda CharDefs + visualDef::ONELINE2SYMBOL
-                sta (zptmp),y
-                rts
-drawLastBlanks:
+                sta (zptmp), y
+@done:          rts
+
+;-----------------------------------------------------------------------------------
+; DrawBlankRun  Fills the band at BandCol with blanks, from the row above NewTop up
+;               to BAND_TOP_ROW
+;-----------------------------------------------------------------------------------
+
+DrawBlankRun:   ldy NewTop
+                cpy #BAND_TOP_ROW+1   ; Nothing to do if the band has maximum height
+                bcc @done
+
+                lda BlankRunLo - BAND_TOP_ROW - 1, y    ; Run entry for row NewTop-1
+                sta RunVector
+                lda BlankRunHi - BAND_TOP_ROW - 1, y
+                sta RunVector+1
+
+                ldx BandCol
                 lda #' '
-                sta (zptmp),y
+                jmp (RunVector)       ; The run returns to our caller
+@done:          rts
+
+;-----------------------------------------------------------------------------------
+; DrawMidRun    Fills the band at BandCol with middle symbols, from the row below
+;               NewTop down to the row above BAND_BOTTOM_ROW, one column at a time
+;-----------------------------------------------------------------------------------
+
+DrawMidRun:     ldy NewTop
                 iny
-                .if COL80
-                sta (zptmp),y
-                iny
-                sta (zptmp),y
-                iny
-                .endif
-                sta (zptmp),y
+                cpy #BAND_BOTTOM_ROW  ; Nothing to do if there are no rows between the
+                bcc :+                ;   top and bottom rows
                 rts
 
-lineLoop:       lda zptmp             ; Advance zptmp by one screen line down
-                clc
-                adc #XSIZE
-                sta zptmp
-                lda zptmp+1
-                adc #0
-                sta zptmp+1
-                jmp lineSwitch
+:               lda MidRunLo - BAND_TOP_ROW - 1, y      ; Run entry for row NewTop+1
+                sta RunVector
+                lda MidRunHi - BAND_TOP_ROW - 1, y
+                sta RunVector+1
+
+                ldx BandCol
+                lda CharDefs + visualDef::VLINE1SYMBOL
+                jsr JumpRun
+                inx
+                .if COL80
+                lda CharDefs + visualDef::HLINE1MIDDLESYMBOL            ; Draw center pieces on 80 column screens only
+                jsr JumpRun
+                inx
+                jsr JumpRun
+                inx
+                .endif
+                lda CharDefs + visualDef::VLINE2SYMBOL
+JumpRun:        jmp (RunVector)       ; The run returns to our caller
+
+;-----------------------------------------------------------------------------------
+; Unrolled runs of stores used by DrawBand, with X holding the band's column offset
+;-----------------------------------------------------------------------------------
+
+STA_ABSX_LEN    = 3                                   ; Length of STA abs,X instruction
+BLANK_RUN_ROWS  = BAND_BOTTOM_ROW - BAND_TOP_ROW      ; Rows above the bottom row
+MID_RUN_ROWS    = BAND_BOTTOM_ROW - BAND_TOP_ROW - 1  ; Rows between top and bottom rows
+
+BlankRun:                             ; All columns of a band, from bottom to top
+.repeat BLANK_RUN_ROWS, row
+  .repeat BAND_WIDTH, col
+                sta BAND_SCREEN_LOC + (BAND_BOTTOM_ROW - 1 - row) * XSIZE + col, x
+  .endrepeat
+.endrepeat
+                rts
+.assert (* - BlankRun) = BLANK_RUN_ROWS * BAND_WIDTH * STA_ABSX_LEN + 1, error
+
+MidRun:                               ; One column of a band, from top to bottom
+.repeat MID_RUN_ROWS, row
+                sta BAND_SCREEN_LOC + (BAND_TOP_ROW + 1 + row) * XSIZE, x
+.endrepeat
+                rts
+.assert (* - MidRun) = MID_RUN_ROWS * STA_ABSX_LEN + 1, error
+
+; Entry points into the runs, by the screen row they start with, from top to bottom
+
+BlankRunLo:
+.repeat BLANK_RUN_ROWS, row
+                .byte <(BlankRun + (BLANK_RUN_ROWS - 1 - row) * BAND_WIDTH * STA_ABSX_LEN)
+.endrepeat
+BlankRunHi:
+.repeat BLANK_RUN_ROWS, row
+                .byte >(BlankRun + (BLANK_RUN_ROWS - 1 - row) * BAND_WIDTH * STA_ABSX_LEN)
+.endrepeat
+
+MidRunLo:
+.repeat MID_RUN_ROWS, row
+                .byte <(MidRun + row * STA_ABSX_LEN)
+.endrepeat
+MidRunHi:
+.repeat MID_RUN_ROWS, row
+                .byte >(MidRun + row * STA_ABSX_LEN)
+.endrepeat
+
+; Screen addresses of the rows that can hold the top of a band, from top to bottom
+
+BandRowLo:
+.repeat BAND_BOTTOM_ROW - BAND_TOP_ROW, row
+                .byte <(BAND_SCREEN_LOC + (BAND_TOP_ROW + row) * XSIZE)
+.endrepeat
+BandRowHi:
+.repeat BAND_BOTTOM_ROW - BAND_TOP_ROW, row
+                .byte >(BAND_SCREEN_LOC + (BAND_TOP_ROW + row) * XSIZE)
+.endrepeat
 
 ;-----------------------------------------------------------------------------------
 ; PlotEx        Replacement for KERNAL plot that fixes color ram update bug
@@ -1682,6 +1805,23 @@ SetNextStyle:   lda NextStyle         ; Take the style index and multiply by 2
                 sta CharDefs, y
                 dey
                 bpl :-
+
+; Note: this routine flows into the next one
+
+;-----------------------------------------------------------------------------------
+; InvalidateBands - Make sure all bands are completely redrawn in the next frame,
+;               and that the next frame is drawn right away
+;-----------------------------------------------------------------------------------
+
+InvalidateBands:
+                lda #$FF              ; No band height matches $FF
+                ldx #NUM_BANDS - 1
+:               sta PrevPeaks, x
+                dex
+                bpl :-
+
+                lda #1
+                sta RedrawFlag
                 rts
 
 ; Visual style definitions.  See the 'visualDef' structure defn in petrock.inc

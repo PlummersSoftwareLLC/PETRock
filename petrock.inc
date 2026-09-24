@@ -209,6 +209,9 @@ TOP_MARGIN          = 3
 BOTTOM_MARGIN       = 4
 .endif
 BAND_HEIGHT         = YSIZE-TOP_MARGIN-BOTTOM_MARGIN
+BAND_BOTTOM_ROW     = YSIZE-BOTTOM_MARGIN-1     ; Screen row that holds the bottom of the bands
+MAX_PEAK            = 16                        ; Highest band value (a 4-bit value plus one)
+BAND_TOP_ROW        = BAND_BOTTOM_ROW-MAX_PEAK+1; Highest screen row a band can reach
 TEXT_WIDTH          = XSIZE-LEFT_MARGIN-RIGHT_MARGIN
 MAX_VU              = (((XSIZE-LEFT_MARGIN-RIGHT_MARGIN)/2)-1)
 
@@ -233,6 +236,7 @@ MAX_VU              = (((XSIZE-LEFT_MARGIN-RIGHT_MARGIN)/2)-1)
     TK_PEEK         = $c2 ; PEEK
 
 .assert (TOP_MARGIN + BOTTOM_MARGIN + BAND_HEIGHT <= YSIZE), error
+.assert (BAND_TOP_ROW >= TOP_MARGIN), error
 
 ; Jiffy clock used for the text timeout on the PET -----------------------
 
