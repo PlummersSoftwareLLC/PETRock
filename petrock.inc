@@ -108,7 +108,7 @@
     ; Serial data packet
 
     MAGIC_LEN           = 1       ; Number of magic bytes if any
-    MAGIC_BYTE_0        = (3 << 4 + 15); Index of "D" plus index of "P"
+    MAGIC_BYTE_0        = ((3 << 4) + 15) ; Index of "D" in high nibble plus index of "P" in low nibble
     DATA_LEN            = 8       ; Size of Data portion
     VU_LEN              = 1       ; Size of VU
     PACKET_LENGTH       = MAGIC_LEN + DATA_LEN + VU_LEN + 1 ; NUL terminated so +1

@@ -34,7 +34,7 @@
 ; The built-in serial code on the C64 is poor, and serial/c64/driver.s contains a new
 ; impl that works well for receiving data up to 4800 baud.
 ; On the PET, built-in serial code is effectively absent. For the PET,
-; serial/c64/driver.s contains an implementation that is confirmed to receive data
+; serial/pet/driver.s contains an implementation that is confirmed to receive data
 ; up to 2400 baud.
 ;
 ;-----------------------------------------------------------------------------------
@@ -96,7 +96,7 @@ ScratchStart:
 .endif
 .if SERIAL                                ; Include serial driver variables
     SerialBufPos:    .res  1              ; Current index into serial buffer
-    SerialBuf:       .res  PACKET_LENGTH  ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
+    SerialBuf:       .res  PACKET_LENGTH  ; Serial buffer for: magic byte + 1 byte vu + 8 PeakBytes + NUL
     SerialBufLen = *-SerialBuf            ; Length of Serial Buffer
   .if C64
 .include "serial/c64/vars.s"
