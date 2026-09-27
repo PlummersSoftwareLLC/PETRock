@@ -105,16 +105,10 @@
     .include        "cbm_kernal.inc"
 
 .if SERIAL
-  .if C64           ; Currently only pull in serial kernal includes for C64
-    .include        "ser-kernel.inc"
-  .endif
-                    ; Error code includes also used by PET driver
-    .include        "ser-error.inc"
-
     ; Serial data packet
 
     MAGIC_LEN           = 1       ; Number of magic bytes if any
-    MAGIC_BYTE_0        = (3 << 4 + 15); Index of "D" plus index of "P"
+    MAGIC_BYTE_0        = ((3 << 4) + 15) ; Index of "D" in high nibble plus index of "P" in low nibble
     DATA_LEN            = 8       ; Size of Data portion
     VU_LEN              = 1       ; Size of VU
     PACKET_LENGTH       = MAGIC_LEN + DATA_LEN + VU_LEN + 1 ; NUL terminated so +1
@@ -209,6 +203,9 @@ TOP_MARGIN          = 3
 BOTTOM_MARGIN       = 4
 .endif
 BAND_HEIGHT         = YSIZE-TOP_MARGIN-BOTTOM_MARGIN
+BAND_BOTTOM_ROW     = YSIZE-BOTTOM_MARGIN-1     ; Screen row that holds the bottom of the bands
+MAX_PEAK            = 16                        ; Highest band value (a 4-bit value plus one)
+BAND_TOP_ROW        = BAND_BOTTOM_ROW-MAX_PEAK+1; Highest screen row a band can reach
 TEXT_WIDTH          = XSIZE-LEFT_MARGIN-RIGHT_MARGIN
 MAX_VU              = (((XSIZE-LEFT_MARGIN-RIGHT_MARGIN)/2)-1)
 
@@ -233,3 +230,14 @@ MAX_VU              = (((XSIZE-LEFT_MARGIN-RIGHT_MARGIN)/2)-1)
     TK_PEEK         = $c2 ; PEEK
 
 .assert (TOP_MARGIN + BOTTOM_MARGIN + BAND_HEIGHT <= YSIZE), error
+.assert (BAND_TOP_ROW >= TOP_MARGIN), error
+
+; Jiffy clock used for the text timeout on the PET -----------------------
+
+.if PET
+  .if SERIAL
+JIFFY_CLOCK     = Jiffies   ; Counted by the serial driver, as it replaces the KERNAL IRQ
+  .else
+JIFFY_CLOCK     = TIME+2    ; Least significant byte of the KERNAL jiffy clock
+  .endif
+.endif

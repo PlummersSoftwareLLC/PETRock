@@ -13,26 +13,28 @@
 ; main draw loop calls DrawBand for each one in turn.  Each frame draws a new set of
 ; peaks from the PeakData table, which has 16 entries, one per band.  That data is
 ; replaced either by a new frame of demo data or an incoming serial packet and the
-; process is repeated, running at about 40 fps.
+; process is repeated.  At 2400 baud, the serial link carries about 21 packets per
+; second.
 ;
 ; Color RAM can be filled with different patterns by stepping through the visual styles
 ; with the C key, but it is not drawn each and every frame.
 ;
-; Basic bar draw is to walk down the bar and draw a blank (when above the bar), the top
-; of the bar, then the middle pieces, then the bottom.  A visual style definition is
-; set that includes all of the PETSCII chars you need to draw a band, like the corners
-; and sides, etc.  It can be changed with the S key.
+; A bar is drawn as blanks above the bar, the top of the bar, then the middle pieces,
+; then the bottom.  To save time, only the rows that changed since the band was last
+; drawn are redrawn.  A visual style definition is set that includes all of the
+; PETSCII chars you need to draw a band, like the corners and sides, etc.  It can be
+; changed with the S key.
 ;
 ; Every frame the serial port is checked for incoming data which is then stored in the
-; SerialBuf.  If that fills up without a nul it is reset, but if a nul comess in at the
-; right place (right packet size) and the magic byte matches, it is used as new peakdata
-; and stored in the PeakData table.  The code on the ESP32 sends it over as 16 nibbles
-; packed into 8 bytes plus a VU value.
+; SerialBuf.  Packets have a fixed size.  If a packet starts with the magic byte and
+; ends with a nul, it is used as new peakdata and stored in the PeakData table.  If
+; not, bytes are skipped until the next nul, after which a new packet is expected.  The
+; code on the ESP32 sends it over as 16 nibbles packed into 8 bytes plus a VU value.
 ;
 ; The built-in serial code on the C64 is poor, and serial/c64/driver.s contains a new
 ; impl that works well for receiving data up to 4800 baud.
 ; On the PET, built-in serial code is effectively absent. For the PET,
-; serial/c64/driver.s contains an implementation that is confirmed to receive data
+; serial/pet/driver.s contains an implementation that is confirmed to receive data
 ; up to 2400 baud.
 ;
 ;-----------------------------------------------------------------------------------
@@ -69,6 +71,12 @@ ScratchStart:
     resultHi:        .res  1
     VU:              .res  1              ; VU Audio Data
     Peaks:           .res  NUM_BANDS      ; Peak Data for current frame
+    PrevPeaks:       .res  NUM_BANDS      ; Band heights on screen ($FF = must redraw)
+    BandIndex:       .res  1              ; Band number being drawn by DrawBand
+    BandCol:         .res  1              ; Screen column offset of that band
+    OldHeight:       .res  1              ; Height of that band before drawing
+    NewTop:          .res  1              ; Screen row of that band's new top
+    RunVector:       .res  2              ; Entry point into BlankRun or MidRun
     NextStyle:       .res  1              ; The next style we will pick
     CharDefs:        .res  VISUALDEF_SIZE ; Storage for the visualDef currently in use
     RedrawFlag:      .res  1              ; Flag to redraw screen
@@ -80,15 +88,15 @@ ScratchStart:
     TextColor:       .res  1              ; Text color at startup
 .endif
     TextTimeout:     .res  1              ; Text timeout second count (0 = disabled)
-.if PET         ; Rudimentary approach for PET. The C64 uses a CIA timer
-    TextCountDown:   .res  2              ; Text timeout countdown timer
+.if PET         ; The PET counts jiffies. The C64 uses a CIA timer
+    TextTimerStart:  .res  1              ; Jiffy count at start of current second
 .endif
 .if .not (PET && SERIAL)
     DemoToggle:      .res  1              ; Update toggle to delay demo mode updates
 .endif
 .if SERIAL                                ; Include serial driver variables
     SerialBufPos:    .res  1              ; Current index into serial buffer
-    SerialBuf:       .res  PACKET_LENGTH  ; Serial buffer for: "DP" + 1 byte vu + 8 PeakBytes
+    SerialBuf:       .res  PACKET_LENGTH  ; Serial buffer for: magic byte + 1 byte vu + 8 PeakBytes + NUL
     SerialBufLen = *-SerialBuf            ; Length of Serial Buffer
   .if C64
 .include "serial/c64/vars.s"
@@ -100,6 +108,7 @@ ScratchStart:
 ScratchEnd:
 
 .assert * <= SCRATCH_END, error           ; Make sure we haven't run off the end of the buffer
+.assert <RunVector <> $FF, error          ; JMP (RunVector) fails if it straddles a page
 
 .if SERIAL
 .assert SerialBufLen = PACKET_LENGTH, error
@@ -207,14 +216,9 @@ drawLoop:
 
 .if SERIAL
                 jsr GetSerialChar
-                cmp #$ff              ; If byte is $ff, check if "no data" was flagged
-                bne @havebyte
-                cpx #<SER_ERR_NO_DATA
-                bne @havebyte
-                cpy #>SER_ERR_NO_DATA
-                beq @donedata
+                bcs @donedata         ; Carry set means there was no data
 
-@havebyte:      jsr GotSerial
+                jsr GotSerial
                 jmp drawLoop
 .endif
 
@@ -257,11 +261,7 @@ drawLoop:
                 dex
                 bpl :-
 
-.if PET
-                jsr DownTextTimer     ; On the PET, decrease the text timer to compensate
-.endif                                ;   for drawing time
-
-.if SERIAL && (C64 || (PET && SENDSTAR))
+.if SERIAL && SENDSTAR
                 lda #'*'              ; Send a * back to the host
                 jsr PutSerialChar
 .endif
@@ -477,50 +477,54 @@ ClrBorderMem:   ldy #XSIZE-1          ; Top line
 ; GotSerial     Process incoming serial bytes from the ESP32
 ;-----------------------------------------------------------------------------------
 ; Store character in serial buffer. Processes packet if character completes it.
+;
+; Packets have a fixed length, and the data in them can contain NUL bytes. So we
+; only accept a packet if its first byte is the magic byte and its last byte is the
+; NUL terminator. If a packet fails that check, we've lost track of where packets
+; start. We then skip bytes until the next NUL, and start a new packet after it.
 ;-----------------------------------------------------------------------------------
 
 GotSerial:      ldy SerialBufPos
-                cpy #SerialBufLen
-                bne @nooverflow
-                ldy #0
+                bmi @skipping             ; SerialBufPos is $FF while we skip to a NUL
+                bne @store                ; Not the first byte of a packet
+
+                cmp #MAGIC_BYTE_0         ; A packet must start with the magic byte
+                beq @store
+                cmp #00                   ; If this is a NUL, a packet may follow it
+                beq @done
+                dey                       ; Otherwise, skip to the next NUL
                 sty SerialBufPos
                 rts
-@nooverflow:
-                sta SerialBuf, y
+
+@skipping:      cmp #00                   ; Found the NUL we were looking for?
+                bne @done                 ;  Nope - Keep skipping
+                iny                       ;  Yep - Next byte should start a packet
+                sty SerialBufPos
+                rts
+
+@store:         sta SerialBuf, y
                 iny
-                sty SerialBufPos
-
-                cmp #00                   ; Look for carriage return meaning end
-                beq :+
-                rts                       ; No CR, back to caller
-
-:               cpy SerialBufPos          ; Are we in the right char pos for it?
-                beq :+                    ;  Yep - Process packet
-                ldy #0                    ;  Nope - Restart filling buffer
-                sty SerialBufPos
-                beq @done
-
-:               jsr GotSerialPacket
-
+                cpy #SerialBufLen         ; Do we have a complete packet?
+                beq @complete
+                sty SerialBufPos          ;  Nope - Wait for more
 @done:          rts
 
-BogusData:
-                ldy #0
+@complete:      ldy #0                    ; Next packet fills the buffer from the start
+                sty SerialBufPos
+
+                cmp #00                   ; Last byte must be the NUL terminator
+                beq GotSerialPacket
+
+                dey                       ; Not a valid packet, so skip to the next NUL
                 sty SerialBufPos
                 rts
 
 ;-----------------------------------------------------------------------------------
-; GotSerialPacket - Recieved a string followed by a carriage return so inspect it
-;                   to see if it could be a data packet, as indicated by 'DP' as
-;                   the first two bytes.  Data Packet? Dave Plummer?  You decide!
+; GotSerialPacket - Unpack a complete data packet, as indicated by the 'DP' in the
+;                   nibbles of the first byte.  Data Packet? Dave Plummer?  You decide!
 ;-----------------------------------------------------------------------------------
 
 GotSerialPacket:
-                ldy SerialBufPos          ; Get received packet length
-                lda SerialBuf             ; Look for 'D'
-                cmp #MAGIC_BYTE_0
-                bne BogusData
-
                 lda SerialBuf+MAGIC_LEN
                 .if COL80
                 asl
@@ -883,38 +887,17 @@ InitVU:         ldy #VUColorTableLen-1
 
                 ; Draw the VU meter on right, then draw its mirror on the left
 
-DrawVU:         lda #<VUPOS1
-                sta zptmp
-                lda #>VUPOS1
-                sta zptmp+1
-                lda #<VUPOS2
-                sta zptmpB
-                lda #>VUPOS2
-                sta zptmpB+1
-
-                ldy #0
-                ldx #MAX_VU-1
+DrawVU:         ldy #0                ; Y walks the right half from left to right,
+                ldx #MAX_VU-1         ;   X walks its mirror from right to left
 vuloop:         lda #VUSYMBOL
                 cpy VU                ; If we're at or below the VU value we use the
                 bcc :+                ;   VUSYMBOL to draw the current char else we use
                 lda #MEDIUMSHADE      ;   the partial shade symbol
-:               sta (zptmp),y         ; Store the char in screen memory
-                sta tempOutput
-
-                tya
-                pha                   ; Save Y
-                txa
-                tay                   ; Move X into Y
-
-                lda tempOutput
-                sta (zptmpB), y
-
-                pla
-                tay
+:               sta VUPOS1, y         ; Store the char in screen memory
+                sta VUPOS2, x
                 iny
                 dex
-                cpy #MAX_VU
-                bcc vuloop
+                bpl vuloop
 
                 rts
 
@@ -1292,150 +1275,286 @@ FcColorMem:     lda #YSIZE-TOP_MARGIN-BOTTOM_MARGIN   ; Count of rows to paint c
 ;               X       Band Number     [PRESERVED]
 ;               A       Height of bar
 ;-----------------------------------------------------------------------------------
-; Static version that makes assumptions:
-;               No dynamic color memory
-;               Band Width of 2
+; A band's screen rows hold blanks above the bar, the top symbols on the bar's top
+; row and middle symbols below that. Its bottom row holds blanks, "single-height"
+; symbols or the bottom symbols, for a height of 0, 1 or more, respectively.
 ;
-; Walks down the screen and depending on whether the current pos is above, equal, or
-; below the bar itself, draws blanks, the bar top, the bar middle, bar bottom or
-; "single-height" characters
+; To save time, we only redraw what changed since the band was last drawn. The
+; height it was drawn with is kept in PrevPeaks:
+; - If the band grew, we draw the top symbols on the new top row, and fill the rows
+;   below it with middle symbols, down to the row above the bottom row.
+; - If the band shrank, we fill the rows above the new top row with blanks, up to
+;   BAND_TOP_ROW, and draw the top symbols on the new top row.
+; - We only redraw the bottom row if what it holds changes.
+; A PrevPeaks value of $FF forces a complete redraw of the band.
+;
+; The runs of blanks and middles are drawn by jumping into unrolled sequences of
+; stores (BlankRun and MidRun) that always continue to their last row. This can
+; rewrite rows with the symbols they already hold, which is quicker than stopping
+; the run early.
 ;-----------------------------------------------------------------------------------
 
-DrawBand:       sta Height            ; Height is height of bar itself
-                txa
+                BAND_SCREEN_LOC = SCREEN_MEM + LEFT_MARGIN
+                BAND_BOTTOM_LOC = BAND_SCREEN_LOC + BAND_BOTTOM_ROW * XSIZE
+
+DrawBand:       cmp #MAX_PEAK+1       ; Limit height to what fits on the screen
+                bcc :+
+                lda #MAX_PEAK
+:               cmp PrevPeaks, x      ; If the band is on screen with this height
+                bne :+                ;   already, we're done
+                rts
+
+:               sta Height            ; Save new height, and swap it in for the
+                lda PrevPeaks, x      ;   old one in PrevPeaks
+                sta OldHeight
+                lda Height
+                sta PrevPeaks, x
+
+                stx BandIndex         ; Save band number and calculate the band's
+                txa                   ;   column offset on screen
                 asl
                 .if COL80
                 asl
                 .endif
-                sta SquareX           ; Bar xPos on screen
+                sta BandCol
 
-                ; Square Y will be the screen line number of the top of the bar
+                lda Height            ; Determine screen row of new top of band
+                jsr BandTopRow
+                sta NewTop
 
-                lda #YSIZE - BOTTOM_MARGIN
+                lda OldHeight         ; If the old height isn't valid, we draw the
+                cmp #$FF              ;   complete band
+                beq @full
+
+                jsr BandTopRow        ; Compare old top row with new top row
+                cmp NewTop
+                beq @bottom           ; Same row, so only the bottom row can change
+                bcc @shrunk           ; Old top is above new top, so the band shrank
+
+                jsr DrawTopRow        ; Band grew
+                jsr DrawMidRun
+                jmp @bottom
+
+@shrunk:        jsr DrawBlankRun
+                jsr DrawTopRow
+
+@bottom:        lda OldHeight         ; The bottom row stays the same if both the old
+                cmp #2                ;   and new height are 2 or more
+                bcc :+
+                lda Height
+                cmp #2
+                bcs @done
+
+:               lda OldHeight         ; Otherwise, only redraw it if its type changed
+                jsr BottomRowType
+                sta OldHeight
+                lda Height
+                jsr BottomRowType
+                cmp OldHeight
+                bne @drawbottom
+@done:          ldx BandIndex
+                rts
+
+@full:          jsr DrawBlankRun
+                jsr DrawTopRow
+                jsr DrawMidRun
+                lda Height
+                jsr BottomRowType
+
+@drawbottom:    ldx BandCol
+                cmp #1
+                beq @oneline
+                bcs @barbottom
+
+                lda #' '              ; Height 0: blanks
+                sta BAND_BOTTOM_LOC, x
+                sta BAND_BOTTOM_LOC+1, x
+                .if COL80
+                sta BAND_BOTTOM_LOC+2, x
+                sta BAND_BOTTOM_LOC+3, x
+                .endif
+                ldx BandIndex
+                rts
+
+@oneline:       lda CharDefs + visualDef::ONELINE1SYMBOL    ; Height 1: single-height symbols
+                sta BAND_BOTTOM_LOC, x
+                .if COL80
+                sta BAND_BOTTOM_LOC+1, x
+                sta BAND_BOTTOM_LOC+2, x
+                .endif
+                lda CharDefs + visualDef::ONELINE2SYMBOL
+                sta BAND_BOTTOM_LOC+BAND_WIDTH-1, x
+                ldx BandIndex
+                rts
+
+@barbottom:     lda CharDefs + visualDef::BOTTOMLEFTSYMBOL  ; Height 2+: bottom symbols
+                sta BAND_BOTTOM_LOC, x
+                .if COL80
+                lda CharDefs + visualDef::BOTTOMMIDDLESYMBOL               ; Draw center pieces on 80 column screens only
+                sta BAND_BOTTOM_LOC+1, x
+                sta BAND_BOTTOM_LOC+2, x
+                .endif
+                lda CharDefs + visualDef::BOTTOMRIGHTSYMBOL
+                sta BAND_BOTTOM_LOC+BAND_WIDTH-1, x
+                ldx BandIndex
+                rts
+
+;-----------------------------------------------------------------------------------
+; BandTopRow    Returns in A the screen row of the top of a band with height A. For
+;               heights 0 and 1 that's BAND_BOTTOM_ROW, as all rows above the bottom
+;               row are then blank.
+;-----------------------------------------------------------------------------------
+
+BandTopRow:     cmp #1
+                bcs :+
+                lda #1
+:               eor #$FF              ; A = BAND_BOTTOM_ROW + 1 - A
                 sec
-                sbc Height
-                sta SquareY
+                adc #BAND_BOTTOM_ROW + 1
+                rts
 
-                ; tempY is the current screen line
+;-----------------------------------------------------------------------------------
+; BottomRowType Returns in A what the bottom row of a band with height A holds:
+;               0 = blanks, 1 = single-height symbols, 2 = bottom symbols
+;-----------------------------------------------------------------------------------
 
-                lda #TOP_MARGIN
-                sta tempY             ; We start on the first screen line of the analyzer
+BottomRowType:  cmp #2
+                bcc :+
+                lda #2
+:               rts
 
-                SCREEN_LOC = (SCREEN_MEM + XSIZE * TOP_MARGIN + LEFT_MARGIN)
+;-----------------------------------------------------------------------------------
+; DrawTopRow    Draws the top symbols of the band at BandCol on row NewTop, unless
+;               that's the bottom row
+;-----------------------------------------------------------------------------------
 
-                lda #<SCREEN_LOC      ; zptmp points to top left of first bar
-                sta zptmp             ;  in screen memory
-                lda #>SCREEN_LOC
+DrawTopRow:     ldy NewTop
+                cpy #BAND_BOTTOM_ROW
+                bcs @done
+
+                lda BandRowLo - BAND_TOP_ROW, y     ; Point zptmp to row NewTop
+                sta zptmp
+                lda BandRowHi - BAND_TOP_ROW, y
                 sta zptmp+1
 
-lineSwitch:     ldy SquareX           ; Y will be the X-pos (zp addr mode not supported on X register)
-                lda tempY             ; Current screen line
-                cmp #YSIZE - BOTTOM_MARGIN - 1
-                bne @notlastline
-                lda Height            ; If 0 height, write blanks instead of band base
-                bne :+
-                jmp drawLastBlanks
-:               cmp #1
-                beq drawOneLine
-                bne drawLastLine
-@notlastline:   cmp SquareY           ; Compare to screen line of top of bar
-                bcc drawBlanks
-                beq drawFirstLine
-                bcs drawMiddleLine
-drawBlanks:
-                lda #' '
-                sta (zptmp),y
-                iny
-                .if COL80
-                sta (zptmp),y
-                iny
-                sta (zptmp),y
-                iny
-                .endif
-                sta (zptmp),y
-                inc tempY
-                bne lineLoop
-drawFirstLine:
+                ldy BandCol
                 lda CharDefs + visualDef::TOPLEFTSYMBOL
-                sta (zptmp),y
+                sta (zptmp), y
                 iny
                 .if COL80
                 lda CharDefs + visualDef::TOPMIDDLESYMBOL               ; Draw center pieces on 80 column screens only
-                sta (zptmp),y
+                sta (zptmp), y
                 iny
-                sta (zptmp),y
+                sta (zptmp), y
                 iny
                 .endif
                 lda CharDefs + visualDef::TOPRIGHTSYMBOL
-                sta (zptmp),y
-                inc tempY
-                bne lineLoop
-drawMiddleLine:
-                lda CharDefs + visualDef::VLINE1SYMBOL
-                sta (zptmp),y
-                iny
-                .if COL80
-                lda CharDefs + visualDef::HLINE1MIDDLESYMBOL               ; Draw center pieces on 80 column screens only
-                sta (zptmp),y
-                iny
-                sta (zptmp),y
-                iny
-                .endif
-                lda CharDefs + visualDef::VLINE2SYMBOL
-                sta (zptmp),y
-                inc tempY
-                cpy #YSIZE-BOTTOM_MARGIN-1
-                bne lineLoop
-drawLastLine:
-                ldy SquareX
-                lda CharDefs + visualDef::BOTTOMLEFTSYMBOL
-                sta (zptmp),y
-                iny
-                .if COL80
-                lda CharDefs + visualDef::BOTTOMMIDDLESYMBOL               ; Draw center pieces on 80 column screens only
-                sta (zptmp),y
-                iny
-                sta (zptmp),y
-                iny
-                .endif
-                lda CharDefs + visualDef::BOTTOMRIGHTSYMBOL
-                sta (zptmp),y
-                rts
-drawOneLine:
-                ldy SquareX
-                lda CharDefs + visualDef::ONELINE1SYMBOL
-                sta (zptmp),y
-                iny
-                .if COL80
-                sta (zptmp),y
-                iny
-                sta (zptmp),y
-                iny
-                .endif
-                lda CharDefs + visualDef::ONELINE2SYMBOL
-                sta (zptmp),y
-                rts
-drawLastBlanks:
+                sta (zptmp), y
+@done:          rts
+
+;-----------------------------------------------------------------------------------
+; DrawBlankRun  Fills the band at BandCol with blanks, from the row above NewTop up
+;               to BAND_TOP_ROW
+;-----------------------------------------------------------------------------------
+
+DrawBlankRun:   ldy NewTop
+                cpy #BAND_TOP_ROW+1   ; Nothing to do if the band has maximum height
+                bcc @done
+
+                lda BlankRunLo - BAND_TOP_ROW - 1, y    ; Run entry for row NewTop-1
+                sta RunVector
+                lda BlankRunHi - BAND_TOP_ROW - 1, y
+                sta RunVector+1
+
+                ldx BandCol
                 lda #' '
-                sta (zptmp),y
+                jmp (RunVector)       ; The run returns to our caller
+@done:          rts
+
+;-----------------------------------------------------------------------------------
+; DrawMidRun    Fills the band at BandCol with middle symbols, from the row below
+;               NewTop down to the row above BAND_BOTTOM_ROW, one column at a time
+;-----------------------------------------------------------------------------------
+
+DrawMidRun:     ldy NewTop
                 iny
-                .if COL80
-                sta (zptmp),y
-                iny
-                sta (zptmp),y
-                iny
-                .endif
-                sta (zptmp),y
+                cpy #BAND_BOTTOM_ROW  ; Nothing to do if there are no rows between the
+                bcc :+                ;   top and bottom rows
                 rts
 
-lineLoop:       lda zptmp             ; Advance zptmp by one screen line down
-                clc
-                adc #XSIZE
-                sta zptmp
-                lda zptmp+1
-                adc #0
-                sta zptmp+1
-                jmp lineSwitch
+:               lda MidRunLo - BAND_TOP_ROW - 1, y      ; Run entry for row NewTop+1
+                sta RunVector
+                lda MidRunHi - BAND_TOP_ROW - 1, y
+                sta RunVector+1
+
+                ldx BandCol
+                lda CharDefs + visualDef::VLINE1SYMBOL
+                jsr JumpRun
+                inx
+                .if COL80
+                lda CharDefs + visualDef::HLINE1MIDDLESYMBOL            ; Draw center pieces on 80 column screens only
+                jsr JumpRun
+                inx
+                jsr JumpRun
+                inx
+                .endif
+                lda CharDefs + visualDef::VLINE2SYMBOL
+JumpRun:        jmp (RunVector)       ; The run returns to our caller
+
+;-----------------------------------------------------------------------------------
+; Unrolled runs of stores used by DrawBand, with X holding the band's column offset
+;-----------------------------------------------------------------------------------
+
+STA_ABSX_LEN    = 3                                   ; Length of STA abs,X instruction
+BLANK_RUN_ROWS  = BAND_BOTTOM_ROW - BAND_TOP_ROW      ; Rows above the bottom row
+MID_RUN_ROWS    = BAND_BOTTOM_ROW - BAND_TOP_ROW - 1  ; Rows between top and bottom rows
+
+BlankRun:                             ; All columns of a band, from bottom to top
+.repeat BLANK_RUN_ROWS, row
+  .repeat BAND_WIDTH, col
+                sta BAND_SCREEN_LOC + (BAND_BOTTOM_ROW - 1 - row) * XSIZE + col, x
+  .endrepeat
+.endrepeat
+                rts
+.assert (* - BlankRun) = BLANK_RUN_ROWS * BAND_WIDTH * STA_ABSX_LEN + 1, error
+
+MidRun:                               ; One column of a band, from top to bottom
+.repeat MID_RUN_ROWS, row
+                sta BAND_SCREEN_LOC + (BAND_TOP_ROW + 1 + row) * XSIZE, x
+.endrepeat
+                rts
+.assert (* - MidRun) = MID_RUN_ROWS * STA_ABSX_LEN + 1, error
+
+; Entry points into the runs, by the screen row they start with, from top to bottom
+
+BlankRunLo:
+.repeat BLANK_RUN_ROWS, row
+                .byte <(BlankRun + (BLANK_RUN_ROWS - 1 - row) * BAND_WIDTH * STA_ABSX_LEN)
+.endrepeat
+BlankRunHi:
+.repeat BLANK_RUN_ROWS, row
+                .byte >(BlankRun + (BLANK_RUN_ROWS - 1 - row) * BAND_WIDTH * STA_ABSX_LEN)
+.endrepeat
+
+MidRunLo:
+.repeat MID_RUN_ROWS, row
+                .byte <(MidRun + row * STA_ABSX_LEN)
+.endrepeat
+MidRunHi:
+.repeat MID_RUN_ROWS, row
+                .byte >(MidRun + row * STA_ABSX_LEN)
+.endrepeat
+
+; Screen addresses of the rows that can hold the top of a band, from top to bottom
+
+BandRowLo:
+.repeat BAND_BOTTOM_ROW - BAND_TOP_ROW, row
+                .byte <(BAND_SCREEN_LOC + (BAND_TOP_ROW + row) * XSIZE)
+.endrepeat
+BandRowHi:
+.repeat BAND_BOTTOM_ROW - BAND_TOP_ROW, row
+                .byte >(BAND_SCREEN_LOC + (BAND_TOP_ROW + row) * XSIZE)
+.endrepeat
 
 ;-----------------------------------------------------------------------------------
 ; PlotEx        Replacement for KERNAL plot that fixes color ram update bug
@@ -1556,45 +1675,11 @@ StartTextTimer:
                 sta CIA1_TOD10          ; This write starts the clock
 .endif
 
-.if PET         ; We use a more rudimentary countdown timer on the PET
-                lda #$00
-                sta TextCountDown
-  .if SERIAL    ;
-                lda #$20                ; Serial handling takes time, so we count
-  .else                                 ;   down from a lower value than when
-                lda #$40                ;   serial is disabled
-  .endif
-                sta TextCountDown+1
+.if PET         ; On the PET we count jiffies
+                lda JIFFY_CLOCK
+                sta TextTimerStart
 .endif
                 rts
-
-.if PET
-
-;-----------------------------------------------------------------------------------
-; DownTextTimer - Cut the PET text timer down by a chunk
-;-----------------------------------------------------------------------------------
-
-DownTextTimer:
-                lda TextTimeout
-                beq @done
-
-                dec TextCountDown+1     ; We take off 384 just because that seems
-                beq @atzero             ;   to work out about right for one screen
-                lda TextCountDown       ;   redraw.
-                sec
-                sbc #$80
-                sta TextCountDown
-                bcs @done
-                dec TextCountDown+1
-                bne @done
-
-@atzero:        lda #1                  ; Due to how CheckTextTimer assesses if time
-                sta TextCountDown       ;   has run out, set lo and hi bytes to 1 to
-                sta TextCountDown+1     ;   finish counting down this sorta second.
-
-@done:          rts
-
-.endif
 
 ;-----------------------------------------------------------------------------------
 ; CheckTextTimer - Clear text if TOD timer is at "TextTimeout" seconds
@@ -1613,15 +1698,20 @@ CheckTextTimer:
                 jmp ClearTextBlock
 .endif
 
-.if PET         ; Decrease countdown timer until we reach $0000
-                dec TextCountDown
-                bne @done
-                dec TextCountDown+1
-                bne @done
+.if PET         ; Check if a second's worth of jiffies has passed
+                lda JIFFY_CLOCK
+                sec
+                sbc TextTimerStart
+                cmp #SECOND_JIFFIES
+                bcc @done
+
+                lda TextTimerStart    ; Start counting the next second
+                clc
+                adc #SECOND_JIFFIES
+                sta TextTimerStart
 
                 dec TextTimeout       ; Decrease timeout second count
                 beq ClearTextBlock    ; If we've reached 0, clear the text block
-                jmp StartTextTimer    ; Otherwise, count down another rough second
 .endif
 
 @done:          rts
@@ -1710,6 +1800,23 @@ SetNextStyle:   lda NextStyle         ; Take the style index and multiply by 2
                 sta CharDefs, y
                 dey
                 bpl :-
+
+; Note: this routine flows into the next one
+
+;-----------------------------------------------------------------------------------
+; InvalidateBands - Make sure all bands are completely redrawn in the next frame,
+;               and that the next frame is drawn right away
+;-----------------------------------------------------------------------------------
+
+InvalidateBands:
+                lda #$FF              ; No band height matches $FF
+                ldx #NUM_BANDS - 1
+:               sta PrevPeaks, x
+                dex
+                bpl :-
+
+                lda #1
+                sta RedrawFlag
                 rts
 
 ; Visual style definitions.  See the 'visualDef' structure defn in petrock.inc

@@ -16,6 +16,12 @@
 ;-----------------------------------------------------------------------------------
 
 ;-----------------------------------------------------------------------------------
+; Serial driver config
+;-----------------------------------------------------------------------------------
+
+SER_BAUD        = BAUD2400      ; BAUD4800, BAUD2400, BAUD1200 or BAUD300
+
+;-----------------------------------------------------------------------------------
 ; Constants
 ;-----------------------------------------------------------------------------------
 
@@ -29,7 +35,6 @@ XSAV            = $97
 DFLTN           = $99
 DFLTO           = $9a
 PTR1            = $9e
-PTR2            = $9f
 BITCI           = $a8
 RIDATA          = $aa
 BITTS           = $b4
@@ -42,7 +47,6 @@ ROBUF           = $f9
 ; I/O space addresses
 ;-----------------------------------------------------------------------------------
 
-BAUDOF          = $0299
 RIDBE           = $029b
 RIDBS           = $029c
 RODBS           = $029d
@@ -68,24 +72,32 @@ OLDCHK          = $f21b
 FINDFN          = $f30f
 SETDEV          = $f31f
 NOFILE          = $f701
-RDBYTE          = $f14e
-EXITRD          = $f1b4
 
 ;-----------------------------------------------------------------------------------
-; Read-only words used by code/kernal API routines
+; Bit timing, in CPU cycles, by baud rate and machine clock
+;
+; strtbit is the timer B delay from the start bit NMI to the first data bit sample,
+; and fullbit the timer latch for one bit (the bit time minus one).
+;
+; The NTSC values for 2400 baud and lower are from the Transactor article. The others
+; are calculated for the clock of the machine, PAL (985248 Hz) or NTSC (1022727 Hz):
+; - fullbit is the bit time minus one, so samples don't drift across a byte.
+; - strtbit makes each sample fall about 45 cycles before the middle of its bit.
+;   It's about 1.5 bit times minus 154 cycles of NMI latency (before the timer
+;   starts, and from underflow to reading the pin) minus those 45 cycles. Sampling
+;   early leaves room for the ways samples get delayed, like VIC bad lines (up to
+;   ~40 cycles each, for the start bit NMI and for the sample itself).
 ;-----------------------------------------------------------------------------------
 
-strtbit:
-strt48:         .word 225       ; 225     Made up by Dave after reading Wikipedia
-strt24:         .word $01cb     ; 459     From the Transactor article
-strt12:         .word $0442     ; 1090    
-strt03:         .word $1333     ; 4915    
+strtbit:        ;  4800  2400  1200   300 baud
+                .word   121,  459, 1090, 4915   ; NTSC
+                .word   109,  418, 1033, 4727   ; PAL
 
-fullbit:
-full48:         .word 208       ; 208     Made up by Dave after reading Wikipedia
-full24:         .word $01a5     ; 421     From the Transactor article
-full12:         .word $034d     ; 845     not referenced directly, but through Y
-full03:         .word $0d52     ; 3410    register indexing
+fullbit:        ;  4800  2400  1200   300 baud
+                .word   212,  421,  845, 3410   ; NTSC
+                .word   204,  410,  820, 3283   ; PAL
+
+PAL_TIMING      = 8             ; Offset of the PAL values in the tables
 
 ; Control Registers
 ; 
@@ -129,40 +141,23 @@ OpenSerial:
 
 ;-----------------------------------------------------------------------------------
 ; GetSerialChar: Will fetch a character from the receive buffer and store it into A.
-; If no data is available, SER_ERR_NO_DATA is returned in X/Y.
+; Carry is clear if a character was fetched, and set if no data is available.
+;
+; We read the buffer directly, instead of through CHKIN, GETIN and CLRCH. That's a
+; lot quicker, and the NMI handler keeps reception enabled after every byte anyway.
 ;-----------------------------------------------------------------------------------
 
-GetSerialChar:   
-        ldx #RS232_DEV
-        jsr CHKIN
-        jsr ser_rshavedata
-        beq @nodata
-        jsr GetBufferChar
-        pha
-        jsr CLRCH 
-        pla
-        ldx #<SER_ERR_OK
-        ldy #>SER_ERR_OK 
+GetSerialChar:
+        ldy RIDBS
+        cpy RIDBE       ; buffer empty?
+        beq @nodata     ; yes
+        lda (RIBUF),y   ; no, fetch character
+        inc RIDBS
+        clc
         rts
 
 @nodata:
-        jsr CLRCH 
-        lda #$ff
-        ldx #<SER_ERR_NO_DATA
-        ldy #>SER_ERR_NO_DATA 
-        rts
-
-;-----------------------------------------------------------------------------------
-; GetBufferChar: This is a minimised call to get the character from the buffer.
-; The Kernal code does not allow zero bytes (0x00)... this does.
-;-----------------------------------------------------------------------------------
- 
-GetBufferChar:
-        jsr RDBYTE
-        bcc @exit
-        jmp EXITRD
-@exit:
-        clc
+        sec
         rts
 
 ;-----------------------------------------------------------------------------------
@@ -185,10 +180,30 @@ PutSerialChar:
 StartSerial     = ser_enable
 
 ;-----------------------------------------------------------------------------------
-; CloseSerial: Teardown serial comms. We just disable it.
+; CloseSerial: Teardown serial comms. We wait for transmission to finish and turn
+; off the serial NMIs. Then we restore the KERNAL vectors that ser_setup changed, as
+; they point into our code. Finally, we close the RS-232 file, which also returns the
+; buffer memory that OPEN took from the top of memory.
 ;-----------------------------------------------------------------------------------
 
-CloseSerial     = ser_disable
+CloseSerial:
+        jsr ser_disable
+
+        lda ser_oldnmi
+        sta NMISR
+        lda ser_oldnmi+1
+        sta NMISR+1
+        lda ser_oldchkin
+        sta CKISR
+        lda ser_oldchkin+1
+        sta CKISR+1
+        lda ser_oldbsout
+        sta BSOSR
+        lda ser_oldbsout+1
+        sta BSOSR+1
+
+        lda #RS232_DEV
+        jmp CLOSE
 
 ;-----------------------------------------------------------------------------------
 ; GetKeyboardChar: Get a character from the keyboard. In this case, just use GETIN
@@ -199,16 +214,31 @@ GetKeyboardChar = GETIN
 ;-----------------------------------------------------------------------------------
 
 ser_setup:
-        ; set things up for our baud rate
-        
-;        lda strt48
-;        sta ser_strtlo
-;        lda strt48+1
-;        sta ser_strthi
-;        lda full48
-;        sta ser_fulllo
-;        lda full48+1
-;        sta ser_fullhi
+        ldy #SER_BAUD   ; set up bit timing for our baud rate
+        lda PALFLAG     ;   and the machine's clock
+        beq :+
+        ldy #SER_BAUD + PAL_TIMING
+:       lda strtbit,y   ; values used by the nmi handler
+        sta ser_strtlo
+        lda strtbit+1,y
+        sta ser_strthi
+        lda fullbit,y
+        sta ser_fulllo
+        lda fullbit+1,y
+        sta ser_fullhi
+
+        lda NMISR       ; save the vectors we're about to change
+        sta ser_oldnmi
+        lda NMISR+1
+        sta ser_oldnmi+1
+        lda CKISR
+        sta ser_oldchkin
+        lda CKISR+1
+        sta ser_oldchkin+1
+        lda BSOSR
+        sta ser_oldbsout
+        lda BSOSR+1
+        sta ser_oldbsout+1
 
         lda #<ser_nmi64
         ldy #>ser_nmi64
@@ -420,30 +450,8 @@ ser_nchkin:
 ser_enable:
         sta PTR1         ; enable rs232 input
         sty XSAV
-;baud:
-        ; BAUD          BAUDOF+1   (BAUDOF+1) & #6
-        ; 2400 == $960     9          9 & 6
-        ; 1200 == $4B0     4          4 & 6
-        ; 300  == $12C     1          1 & 6 
-        
-        ; BUGBUG if easy and possible let this work as it used to, even though
-        ; I have NFI what it's supposed to be doing.  Let bigger heads prevail.
-        ;
-        ; lda BAUDOF+1    ; set receive to same
-        ; and #$06        ;   baud rate as xmit
-        ; tay     
-        ; lda strt24,y
-        
-        ldy #BAUD2400   ; We could allow selection by Y reg here if desired
-        lda strtbit,y    ;   
-        sta ser_strtlo  ; overwrite values used by nmi handler
-        lda strtbit+1,y
-        sta ser_strthi
-        lda fullbit,y
-        sta ser_fulllo
-        lda fullbit+1,y
-        sta ser_fullhi
-        
+        ; The original code derived the bit timing from the KERNAL's transmit
+        ; bit time in BAUDOF here. We set it up once, in ser_setup.
         lda ENABL
         and #$12        ; *flag or tb on?
         bne ser_ret1    ; yes
@@ -455,32 +463,8 @@ ser_nosuch:
 ser_back:
         lda DEVNUM
         jmp OLDCHK
-;--------------------------------------
-; rsget:
-        sta PTR1        ; input from modem
-        sty PTR2
-        ldy RIDBS
-        cpy RIDBE       ; buffer empty?
-        beq ser_ret2    ; yes
-        lda (RIBUF),y   ; no, fetch character
-        sta PTR1
-        inc RIDBS
 ser_ret1:
-        clc             ; cc = char in acc.
-ser_ret2:
-        ldy PTR2
+        clc
+        ldy XSAV        ; restore registers saved by ser_enable
         lda PTR1
-;last:
-        rts             ; cs = buffer was empty
-
-;----------------------------------------
-; A = 0 when no data
-; A = 1 when data
-ser_rshavedata:
-        lda #0
-        ldy RIDBS
-        cpy RIDBE       ; buffer empty?
-        beq @rsempty    ; no
-        lda #1
-@rsempty:
-        rts 
+        rts

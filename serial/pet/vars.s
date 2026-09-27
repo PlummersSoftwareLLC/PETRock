@@ -24,3 +24,6 @@ CtrlFlag:       .res 1      ; Indicator if Ctrl was pressed
 
 IrqBasicLo:     .res 1      ; Hardware interrupt lo byte for BASIC
 IrqBasicHi:     .res 1      ; Hardware interrupt hi byte for BASIC
+PcrBasic:       .res 1      ; VIA PCR value for BASIC
+
+Jiffies:        .res 1      ; Jiffy counter, increased once per keyboard scan (~60 Hz)

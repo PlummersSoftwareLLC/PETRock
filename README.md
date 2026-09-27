@@ -8,17 +8,17 @@ A spectrum analyzer display for the C64 and the PET that receives its data from 
 
 The application logic is implemented in [petrock.asm](petrock.asm). It pulls in a few supporting include files to define symbols, add demo data, and facilitate serial communication.
 
-The application draws 16 vertical bands of the spectrum analyzer which can be up to 16 high. The program first clears the screen, draws the border and text, fills in color, and the main draw loop calls DrawBand for each one in turn. Each frame draws a new set of peaks from the PeakData table, which has 16 entries, one per band. That data is replaced either by a new frame of demo data or an incoming serial packet and the process is repeated, running at about 40 fps.
+The application draws 16 vertical bands of the spectrum analyzer which can be up to 16 high. The program first clears the screen, draws the border and text, fills in color, and the main draw loop calls DrawBand for each one in turn. Each frame draws a new set of peaks from the PeakData table, which has 16 entries, one per band. That data is replaced either by a new frame of demo data or an incoming serial packet and the process is repeated. At 2400 baud, the serial link carries about 21 packets per second.
 
 Color RAM can be filled with different patterns by stepping through the visual styles with the C key, but it is not drawn each and every frame.
 
-Basic bar draw is to walk down the bar and draw a blank (when above the bar), the top of the bar, then the middle pieces, then the bottom. A visual style definition is set that includes all of the PETSCII chars you need to draw a band, like the corners and sides, etc. It can be changed with the S key.
+A bar is drawn as blanks above the bar, the top of the bar, then the middle pieces, then the bottom. To save time, only the rows that changed since the band was last drawn are redrawn. A visual style definition is set that includes all of the PETSCII chars you need to draw a band, like the corners and sides, etc. It can be changed with the S key.
 
-Every frame the serial port is checked for incoming data which is then stored in the SerialBuf. If that fills up without a nul it is reset, but if a nul comess in at the right place (right packet size) and the magic byte matches, it is used as new peakdata and stored in the PeakData table. The code on the ESP32 sends it over as 16 nibbles packed into 8 bytes plus a VU value.
+Every frame the serial port is checked for incoming data which is then stored in the SerialBuf. Packets have a fixed size. If a packet starts with the magic byte and ends with a nul, it is used as new peakdata and stored in the PeakData table. If not, bytes are skipped until the next nul, after which a new packet is expected. The code on the ESP32 sends it over as 16 nibbles packed into 8 bytes plus a VU value.
 
 Concerning handling of serial input:
 
-- On the C64, the built-in serial code is poor. [serial/c64/driver.s](serial/c64/driver.s) contains a new implementation for the C64 that works well for receiving data up to 4800 baud.
+- On the C64, the built-in serial code is poor. [serial/c64/driver.s](serial/c64/driver.s) contains a new implementation for the C64 that works well for receiving data up to 4800 baud. It uses bit timing for either PAL or NTSC machines, depending on which it runs on. The baud rate is set by `SER_BAUD` in the driver.
 - On the PET, a built-in serial driver is effectively absent. [serial/pet/driver.s](serial/pet/driver.s) contains an implementation for the PET that is confirmed to receive data up to 2400 baud. Due to the hardware involved (the PET uses a 6522 VIA instead of the C64's 6526 CIA), the serial driver also includes its own keyboard polling routines.
 
 ## Configuring and building
@@ -31,7 +31,7 @@ In the [`settings.inc`](settings.inc) file, a number of symbols are defined that
 |C64|0 or 1|No|Configure build for the Commodore 64. Exactly one of C64 or PET **must** be defined to equal 1.|
 |DEBUG|0 or 1|Yes|Set to 1 to enable code that only is included for debug builds.|
 |PET|0 or 1|No|Configure build for the PET. Exactly one of C64 or PET **must** be defined to equal 1.|
-|SENDSTAR|0 or 1|Yes, on the PET with SERIAL enabled|Set to 1 to send a \* after each screen redraw on the PET when SERIAL is enabled. This will create clicking noises on PETs with a piezo speaker installed. On the C64 this setting is ignored, and the \* is always sent when serial is enabled.|
+|SENDSTAR|0 or 1|Yes, with SERIAL enabled|Set to 1 to send a \* after each screen redraw when SERIAL is enabled. The ESP32 code in NightDriverStrip doesn't use it. This will create clicking noises on PETs with a piezo speaker installed. With SENDSTAR set to 0, the PET serial driver leaves out transmission, which allows its timer interrupt to run at a much lower rate.|
 |SERIAL|0 or 1|Yes|Set to 1 to read visualisation data from the user port.|
 |TIMING|0 or 1|Yes|Set to 1 to show timing information concerning the drawing of spectrum analyzer updates. Only supported on the C64 and has not been used for a while, so may need some attention to make it work.|
 
